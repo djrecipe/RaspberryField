@@ -235,7 +235,7 @@ void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels, bool print_bl
                     r_gain = fmax(gain * ratio, 0.2);                 // increases with amplitude
                     g_gain = gain * ((float)(j+1)/(float)BIN_COUNT);      // increases with frequency
                     b_gain = gain * ((float)(BIN_COUNT-j)/(float)BIN_COUNT);
-                    r = 180.0*r_gain;
+                    r = 120.0*r_gain;
                     g = 120.0*g_gain;
                     b = 120.0*b_gain;
                     // draw
