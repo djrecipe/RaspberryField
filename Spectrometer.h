@@ -23,12 +23,21 @@
 #include "GridTransformer.h"
 #include "mailbox.h"
 
+// capture device
 #define PCM_DEVICE "plughw:1,0"
+// 'center' amplitude (db) from which gain multipliers are derived
+#define CENTER_AMPLITUDE 40.0
+// number of fft jobs (always 1?)
 #define FFT_JOBS 1
+// fft iterations
 #define FFT_LOOPS 1
+// determines fft length & buffer size
 #define FFT_LOG 9
+// # of frequency bins
 #define BIN_COUNT 16
+// history count for each frequency bin
 #define BIN_DEPTH 8
+// capture sample rate
 #define SAMP_RATE 11025
 
 class Spectrometer

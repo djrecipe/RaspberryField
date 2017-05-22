@@ -37,6 +37,11 @@ public:
     assert(_source != NULL);
     _source->Fill(red, green, blue);
   }
+  
+  void SetMaxBrightness(int value);
+  void SetMirrorX(bool value);
+  void SetMirrorY(bool value);
+  
   virtual void SetPixel(int x, int y, uint8_t red, uint8_t green, uint8_t blue);
 
   // Transformer interface implementation:
@@ -58,6 +63,8 @@ private:
       _chain_length,
       _rows,
       _cols;
+  int maxBrightness;
+  bool mirrorX, mirrorY;
   rgb_matrix::Canvas* _source;
   std::vector<Panel> _panels;
 };
