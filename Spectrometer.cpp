@@ -15,7 +15,7 @@ Spectrometer::Spectrometer(char* config_path)
         this->pixels[i] = new bool[this->panelHeight];
     }
     this->lib_logo = new unsigned char[this->panelWidth * this->panelHeight * 3];
-    this->ReadBitmap("lib-logo-2.bmp", this->lib_logo);
+    this->ReadBitmap("lib-logo.bmp", this->lib_logo);
     return;
 }
 
@@ -217,13 +217,13 @@ void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels, bool print_bl
                         continue;
                     pixels[x_index][y] = true;
                     gain = (float)(BIN_DEPTH - i - 1)/BIN_DEPTH;
-                    r_gain = 1.0;
+                    r_gain = 1.0*gain;
                     g_gain = 1.0*gain * (ratio+0.5);
                     b_gain = 1.0*gain * (1.0/(ratio+0.5));
-                    r = 50.0*r_gain;
-                    g = 150*g_gain;
-                    b = 150*b_gain;
-                    this->canvas->SetPixel(x_index, y, r%360, g%360, b%360);
+                    r = fmin(50.0*r_gain, 225.0);
+                    g = fmin(150*g_gain, 225.0);
+                    b = fmin(150*b_gain, 225.0);
+                    this->canvas->SetPixel(x_index, y, r, g, b);
                 }
             }
         }
@@ -248,20 +248,25 @@ void Spectrometer::PrintBlack(bool** pixels)
 void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned char * data)
 {
     // initialize parameters
-    int x = 0, y = 0, r = 0, g = 0, b = 0, i = 0, j=0,max_index = 0;
-    float maxs[4];
+    int x = 0, y = 0, r = 0, g = 0, b = 0, i = 0, j=0, max_index = 0;
+    float white_gain = 1.0, red_gain = 1.0, green_gain = 1.0, blue_gain = 1.0, red_ratio = 0.0, green_ratio = 0.0, blue_ratio = 0.0, sum = 0.0;
+    float avgs[4];
     for(i=0; i<4; i++)
     {
-        maxs[i] = 0.0;
+        avgs[i] = 0.0;
     }
     // find max
     for(i=0; i<BIN_DEPTH; i++)
     {
         for(j=0; j<BIN_COUNT; j++)
         {
-            max_index = BIN_COUNT/4;
-            maxs[max_index] = fmax(maxs[max_index], bins[i][j]);
+            max_index = j/4;
+            avgs[max_index] += (float)bins[i][j];
         }
+    }
+    for(i=0; i<4; i++)
+    {
+        avgs[i] = avgs[i] / (BIN_DEPTH * BIN_COUNT / 4);
     }
     // draw
     for(x =0; x<this->panelWidth; x++)
@@ -271,9 +276,26 @@ void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned ch
             if(pixels[x][y])
                 continue;
             int index = y * this->panelWidth * 3 + x*3;
-            r = data[index]*(maxs[0]/100.0);
-            g = data[index+1]*(maxs[0]/100.0);
-            b = data[index+2]*(maxs[0]/100.0);
+            sum = (float)((int)data[index] + (int)data[index+1] + (int)data[index+2]);
+            if(sum == 0)
+                red_ratio = 0.0;
+            else
+                red_ratio = (float)(int)data[index] / sum; 
+            red_gain = (avgs[3]/40.0) * red_ratio;    
+            if(sum == 0)
+                green_ratio = 0.0;
+            else
+                green_ratio = (float)(int)data[index+1] / sum; 
+            green_gain = (avgs[2]/40.0) * green_ratio;
+            if(sum == 0)
+                blue_ratio = 0.0;
+            else
+                blue_ratio = (float)(int)data[index+2] / sum; 
+            blue_gain = (avgs[1]/40.0) * blue_ratio;
+            white_gain = avgs[0]/100.0;
+            r = (int)fmin((float)data[index]*white_gain*red_gain, 225.0);
+            g = (int)fmin((float)data[index+1]*white_gain*green_gain, 225.0);
+            b = (int)fmin((float)data[index+2]*white_gain*blue_gain, 225.0);
             this->canvas->SetPixel(this->panelWidth - x - 1, y, r, g, b);
             pixels[x][y] = true;
         }
@@ -397,7 +419,7 @@ void Spectrometer::Start()
         clock_gettime(CLOCK_REALTIME, &time);
     
         // display
-        if(time.tv_sec%50<15)
+        if(time.tv_sec%50<51)
         {
             this->PrintBitmap(bins, pixels, this->lib_logo);
         }
