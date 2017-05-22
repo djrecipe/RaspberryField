@@ -64,6 +64,7 @@ class Spectrometer
     void PrintBars(int bins[][BIN_COUNT], bool** pixels, bool print_black);
     void PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned char* data);
     void PrintBlack(bool** pixels);
+	void PrintRadial(int bins[][BIN_COUNT], bool** pixels);
     void PrintText(int x, int y, const std::string& message, int r = 255, int g = 255, int b = 255);
 	void ReadBitmap(char* filename, unsigned char* data);
       

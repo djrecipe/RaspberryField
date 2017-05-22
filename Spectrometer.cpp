@@ -22,7 +22,7 @@ Spectrometer::Spectrometer(char* config_path)
 void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
 {
     int full_count = 1<<FFT_LOG;
-    float frequencies[BIN_COUNT + 1]= {20.0,50.0,100.0,150.0,200.0,250.0,300.0,400.0,500.0,750.0,1000.0,1250.0,1500.0,2000.0,3000.0,5000.0,7500.0};
+    float frequencies[BIN_COUNT + 1]= {20.0,50.0,100.0,150.0,200.0,250.0,300.0,350.0,400.0,500.0,600.0,750.0,1000.0,2000.0,3000.0,5000.0,7500.0};
     float avgs[BIN_COUNT];
     int counts[BIN_COUNT];
     
@@ -57,16 +57,19 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
             }
         }
     }
-    float original_ratio = 0.975;
+    float original_ratio = 0.94;
     for(i=0; i<BIN_COUNT; i++)
     {
-        avgs[i] = avgs[i] / (float)counts[i];
+		if(counts[i] ==0)
+			avgs[i] = 0.0;
+		else
+			avgs[i] = avgs[i] / (float)counts[i];
         // convert to db
         if(logarithmic)
             avgs[i] = 20.0 * log10(avgs[i]);
-        float ratio = pow(original_ratio, (float)(BIN_COUNT-i-1));
         // normalize
-        bins[i] = fmax(avgs[i] - 55.0, 0.0) * 2.5 * ratio;
+        float ratio = pow(original_ratio, (float)(BIN_COUNT-i-1));
+        bins[i] = fmin(fmax(avgs[i] - 80.0, 0.0) * 3.0 * ratio, 100.0);
     }
     return;
 }
@@ -199,7 +202,7 @@ void Spectrometer::InitializeLEDMatrix(char* config_path)
 void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels, bool print_black)
 {
     // intialize parameters
-	int col_width = (int)((float)this->panelWidth/(float)BIN_COUNT);
+	int col_width = (float)this->panelWidth/(float)BIN_COUNT;
     int i=0,j=0,r=0,g=0,b=0,x=0,x_index=0,y=0,bar_height=0;
     float ratio=0.0,gain=0.0,r_gain=0.0,g_gain=0.0,b_gain=0.0;
     for(i=0; i<BIN_DEPTH; i++)
@@ -211,18 +214,18 @@ void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels, bool print_bl
             for(x=0; x<col_width; x++)
             {
                 x_index = this->panelWidth - (j * col_width + x) - 1; // reverse x
-                for(y=0; y<bar_height; y++)
+                for(y=0; y<=bar_height; y++)
                 {
                     if(pixels[x_index][y])
                         continue;
                     pixels[x_index][y] = true;
                     gain = (float)(BIN_DEPTH - i - 1)/BIN_DEPTH;
-                    r_gain = 1.0*gain;
-                    g_gain = 1.0*gain * (ratio+0.5);
-                    b_gain = 1.0*gain * (1.0/(ratio+0.5));
-                    r = fmin(50.0*r_gain, 225.0);
-                    g = fmin(150*g_gain, 225.0);
-                    b = fmin(150*b_gain, 225.0);
+                    r_gain = 1.0*gain * ((float)j/(float)(BIN_COUNT/2));
+                    g_gain = 1.0*gain * (ratio+0.6);
+                    b_gain = 1.0*gain * (1.0/(ratio+0.6));
+                    r = fmax(fmin(110.0*r_gain, 225.0), 0.0);
+                    g = fmax(fmin(110.0*g_gain, 225.0), 0.0);
+                    b = fmax(fmin(110.0*b_gain, 225.0), 0.0);
                     this->canvas->SetPixel(x_index, y, r, g, b);
                 }
             }
@@ -294,11 +297,11 @@ void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned ch
                     ratio = 1.0;
                 else
                     ratio = (float)data[index+i]/(float)avg_pixel;
-                gains[i] = pow((avgs[i]/40.0) * ratio, 2.0); 
+                gains[i] = pow((avgs[i]/20.0) * ratio, 2.0); 
             }   
-            r = (int)fmin((float)data[index]*gains[0], 225.0);
-            g = (int)fmin((float)data[index+1]*gains[1], 225.0);
-            b = (int)fmin((float)data[index+2]*gains[2], 225.0);
+            r = fmin((float)data[index]*gains[0], 225.0);
+            g = fmin((float)data[index+1]*gains[1], 225.0);
+            b = fmin((float)data[index+2]*gains[2], 225.0);
             this->canvas->SetPixel(this->panelWidth - x - 1, y, r, g, b);
             pixels[x][y] = true;
         }
@@ -328,6 +331,47 @@ void Spectrometer::PrintText(int x, int y, const string& message, int r, int g, 
     // Add a column of padding between characters.
     x += 1;
   }
+}
+void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels)
+{
+	// intialize parameters
+	int col_width = (float)this->panelWidth/(float)BIN_COUNT;
+    int i=0,j=0,k=0,r=0,g=0,b=0,x=0,y=0;
+    float freq_ratio=0.0,amplitude_ratio=0.0,gain=0.0,angle=0.0;
+	// iterate through bins depthwise
+    for(i=0; i<BIN_DEPTH; i++)
+    {
+		// calculate gain (1 -> 0) 
+		gain = (float)(BIN_DEPTH-i)/(float)BIN_DEPTH;
+		// iterate through bins
+        for(j=0; j<BIN_COUNT; j++)
+        {
+			// calculate ratios
+			freq_ratio = (float)(j+1)/(float)BIN_COUNT;
+            amplitude_ratio = (float)bins[i][j] / 50.0;
+			// calculate color(s) (based on amplitude)
+			g = 150.0*amplitude_ratio*gain;
+			// iterate through set of close angles
+			for(k =0; k<4; k++)
+			{
+				// calculate angle (based on frequency)
+				angle = freq_ratio * M_PI * 2.0 + M_PI/2.0 + (M_PI*(k-2))/16.0;
+				// calculate output coordinates
+				x = fmax(fmin(32 + 32.0 * sin(angle) * amplitude_ratio, 63), 0);
+				y = fmax(fmin(16 + 16.0 * cos(angle) * amplitude_ratio, 31), 0);
+				// check if already written
+				if(!pixels[x][y])
+				{
+					// calculate color(s) (based on frequency)
+					r = fmin(100.0+x*3,255.0)*gain;
+					b = fmin(100.0+y*3,255.0)*gain;
+					// draw
+					this->canvas->SetPixel(x, y, r, b, g);
+					pixels[x][y] = true;
+				}
+			}
+        }
+    }
 }
 void Spectrometer::ReadBitmap(char* filename, unsigned char* data)
 {
@@ -422,10 +466,14 @@ void Spectrometer::Start()
         clock_gettime(CLOCK_REALTIME, &time);
     
         // display
-        if(time.tv_sec%50<10)
+        if(time.tv_sec%60<10)
         {
             this->PrintBitmap(bins, pixels, this->lib_logo);
         }
+		else if(time.tv_sec%60<30)
+		{
+            this->PrintRadial(bins, pixels);
+		}
         else
         {  
             this->PrintBars(bins, pixels, true);
