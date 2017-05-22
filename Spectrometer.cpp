@@ -334,6 +334,7 @@ void Spectrometer::PrintText(int x, int y, const string& message, int r, int g, 
 }
 void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels)
 {
+<<<<<<< HEAD
 	// intialize parameters
 	int col_width = (float)this->panelWidth/(float)BIN_COUNT;
     int i=0,j=0,k=0,r=0,g=0,b=0,x=0,y=0;
@@ -370,6 +371,17 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels)
 					pixels[x][y] = true;
 				}
 			}
+=======
+	    // intialize parameters
+	int col_width = (int)((float)this->panelWidth/(float)BIN_COUNT);
+    int i=0,j=0,r=0,g=0,b=0,x=0,y=0;
+    float ratio=0.0,gain=0.0,r_gain=0.0,g_gain=0.0,b_gain=0.0;
+    for(i=0; i<BIN_DEPTH; i++)
+    {
+        for(j=0; j<BIN_COUNT; j++)
+        {
+            ratio = (float)bins[i][j] / 100.0;
+>>>>>>> 6ba45dcc37194d3a796ee251ab3db5c53eccc314
         }
     }
 }
