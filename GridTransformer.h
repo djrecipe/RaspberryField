@@ -6,6 +6,7 @@
 
 #include <cassert>
 #include <vector>
+#include <math.h>
 
 #include "led-matrix.h"
 
