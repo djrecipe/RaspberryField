@@ -480,18 +480,18 @@ void Spectrometer::Start()
         clock_gettime(CLOCK_REALTIME, &time);
     
         // display
-        //if(time.tv_sec%60<10)
-        //{
-        //    this->PrintBitmap(bins, pixels, this->lib_logo);
-        //}
-		//else if(time.tv_sec%60<30)
-		//{
-        //    this->PrintRadial(bins, pixels);
-		//}
-        //else
-        //{  
+        if(time.tv_sec%60<10)
+        {
+            this->PrintBitmap(bins, pixels, this->lib_logo);
+        }
+		else if(time.tv_sec%60<30)
+		{
+            this->PrintRadial(bins, pixels);
+		}
+        else
+        {  
             this->PrintBars(bins, pixels, true);
-        //}
+        }
         this->PrintBlack(pixels);
         // sleep
         usleep(10000);
