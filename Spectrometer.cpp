@@ -61,7 +61,7 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
         }
     }
     float attenuation_factor = 1.0;
-    float offset = 80.0; // -dBs at the lowest frequency bin
+    float offset = 60.0; // -dBs at the lowest frequency bin
     for(i=0; i<BIN_COUNT; i++)
     {
 		if(counts[i] ==0)
@@ -279,7 +279,7 @@ void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels)
         for(j=0; j<BIN_COUNT; j++)
         {
             // calculate amplitude
-            ratio = (float)bins[i][j] / CENTER_AMPLITUDE;
+            ratio = (float)bins[i][j] / 100.0;
             bar_height = (int)(ratio * (float)this->panelHeight);
             // iterate across
             for(x=0; x<col_width; x++)
@@ -351,7 +351,7 @@ void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned ch
                 for(j=0; j<BIN_COUNT; j++)
                 {
                     // calculate base gain (based on bin amplitude)
-                    bin_gain = ((float)bins[i][j] / CENTER_AMPLITUDE)*1.3;
+                    bin_gain = (float)bins[i][j] / 100.0;
                     // calculate red gain (increases with bin frequency)
                     red_gain += bin_gain * ((float)(j+1)/(float)BIN_COUNT+0.5);
                     // calculate green gain (increases towards center frequency)
@@ -403,11 +403,12 @@ void Spectrometer::PrintText(int x, int y, const string& message, int r, int g, 
     x += 1;
   }
 }
-void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels)
+void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels, timespec time)
 {
 	// intialize parameters
     int i=0,j=0,k=0,r=0,g=0,b=0,x=0,y=0;
     float freq_ratio=0.0,amplitude_ratio=0.0,decay=0.0,base_angle=0.0,angle=0.0,red_gain=1.0,blue_gain=1.0,green_gain=1.0;
+    float angle_offset = ((M_PI * 2.0)/100.0)*(float)(time.tv_nsec/10000000);
     this->canvas->SetPixel(31, 15, 0, 0, 0);
     pixels[31][15] = true;
 	// iterate through bins depthwise
@@ -430,15 +431,20 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels)
             // amplitude ratio ([low amplitude] 0.0 -> 1.0 [high amplitude])
             amplitude_ratio = (float)(bins[i][j]) / 100.0;
 			// angle ([low frequency] 0 rad -> 2pi rad [high frequency])
-            base_angle = freq_ratio * M_PI * 2.0;
+            base_angle = freq_ratio * M_PI * 2.0+angle_offset;
 			// iterate through set of close angles (i.e. "fan out")
 			for(k =0; k<RADIAL_FAN_COUNT; k++)
 			{
 				// fan angle
 				angle = base_angle + (M_PI*(k-2))/RADIAL_FAN_SPACING;
 				// calculate output coordinates (center point + frequency and amplitude vectors)
-				x = abs((int)((float)this->panelWidth/2.0 + (float)(this->panelWidth/2) * sin(angle)*amplitude_ratio))%this->panelWidth;
-				y = abs((int)((float)this->panelHeight/2.0 + (float)(this->panelHeight/2) * cos(angle)*amplitude_ratio))%this->panelHeight;
+				//x = abs((int)((float)this->panelWidth/2.0 + (float)(this->panelWidth/2) * sin(angle)*amplitude_ratio))%this->panelWidth;
+				//y = abs((int)((float)this->panelHeight/2.0 + (float)(this->panelHeight/2) * cos(angle)*amplitude_ratio))%this->panelHeight;
+				x = (int)((float)this->panelWidth/2.0 + (float)(this->panelWidth/2) * sin(angle)*amplitude_ratio);
+				y = (int)((float)this->panelHeight/2.0 + (float)(this->panelHeight/2) * cos(angle)*amplitude_ratio);
+                // NOTE: the approach of discarding out-of-range pixels with this mode seems to look better than trying to limit or apply modulus
+                if(x<0 || y < 0 || x>=this->panelWidth || y >=this->panelHeight)
+                    continue;
                 // calculate color(s) (based on frequency and age)
                 r = 100.0*red_gain*decay;
                 b = 100.0*blue_gain*decay;
@@ -606,7 +612,7 @@ void Spectrometer::Start()
 				this->PrintBitmap(normalized_bins, pixels, this->lib_logo);
 				break;
 			case Radial:
-				this->PrintRadial(normalized_bins, pixels);
+				this->PrintRadial(normalized_bins, pixels, time);
 				break;
 			default:
 				break;

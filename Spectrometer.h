@@ -26,8 +26,6 @@
 
 // capture device
 #define PCM_DEVICE "plughw:1,0"
-// 'center' amplitude (db) from which gain multipliers are derived
-#define CENTER_AMPLITUDE 50.0
 // number of fft jobs (always 1?)
 #define FFT_JOBS 1
 // fft iterations
@@ -37,7 +35,7 @@
 // # of frequency bins
 #define BIN_COUNT 16
 // history count for each frequency bin (for normalization)
-#define TOTAL_BIN_DEPTH 32
+#define TOTAL_BIN_DEPTH 64
 // history count for each frequency bin (for display)
 #define BIN_DEPTH 8
 // number of "fan blades" per bin value
@@ -90,7 +88,7 @@ class Spectrometer
     void PrintBars(int bins[][BIN_COUNT], bool** pixels);
     void PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned char* data);
     void PrintBlack(bool** pixels, bool** exclude);
-	void PrintRadial(int bins[][BIN_COUNT], bool** pixels);
+	void PrintRadial(int bins[][BIN_COUNT], bool** pixels, timespec time);
     void PrintText(int x, int y, const std::string& message, int r = 255, int g = 255, int b = 255);
 	void ReadBitmap(char* filename, unsigned char* data);
 	void RemoveExclusions(bool** exclude);
