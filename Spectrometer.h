@@ -27,7 +27,7 @@
 // capture device
 #define PCM_DEVICE "plughw:1,0"
 // 'center' amplitude (db) from which gain multipliers are derived
-#define CENTER_AMPLITUDE 30.0
+#define CENTER_AMPLITUDE 50.0
 // number of fft jobs (always 1?)
 #define FFT_JOBS 1
 // fft iterations
@@ -36,7 +36,9 @@
 #define FFT_LOG 9
 // # of frequency bins
 #define BIN_COUNT 16
-// history count for each frequency bin
+// history count for each frequency bin (for normalization)
+#define TOTAL_BIN_DEPTH 32
+// history count for each frequency bin (for display)
 #define BIN_DEPTH 8
 // capture sample rate
 #define SAMP_RATE 11025
@@ -80,7 +82,8 @@ class Spectrometer
     void InitializeAudioDevice();
     void InitializeLEDMatrix(char* config_path);
     void InitializeFFT();
-    void PrintBars(int bins[][BIN_COUNT], bool** pixels, bool print_black);
+    void NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BIN_COUNT]);
+    void PrintBars(int bins[][BIN_COUNT], bool** pixels);
     void PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned char* data);
     void PrintBlack(bool** pixels, bool** exclude);
 	void PrintRadial(int bins[][BIN_COUNT], bool** pixels);

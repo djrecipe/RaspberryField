@@ -28,7 +28,6 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
     float frequencies[BIN_COUNT + 1]= {20.0,50.0,100.0,150.0,200.0,250.0,300.0,350.0,400.0,500.0,600.0,750.0,1000.0,2000.0,3000.0,5000.0,7500.0};
     float avgs[BIN_COUNT];
     int counts[BIN_COUNT];
-    float ratio = 1.0;
     
     int i=0,j=0;
     
@@ -61,6 +60,8 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
             }
         }
     }
+    float attenuation_factor = 1.0;
+    float offset = 80.0; // -90 dBs at the lowest range
     for(i=0; i<BIN_COUNT; i++)
     {
 		if(counts[i] ==0)
@@ -70,10 +71,9 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
         // convert to db
         if(logarithmic)
             avgs[i] = 20.0 * log10(avgs[i]);
-		// reduce low frequency impact
-        ratio = sqrt((float)(BIN_COUNT - i)/(float)BIN_COUNT + 0.5);
-        // normalize
-        bins[i] = fmin(fmax(avgs[i] - 90.0 * ratio, 0.0) * 1.3, 100.0);
+		// reduce low frequency impact ([low_freq] 1.0 -> 0.0 [high freq]   sqrt function attenuation factor)
+        attenuation_factor = sqrt((float)(BIN_COUNT - i)/(float)BIN_COUNT);
+        bins[i] = fmax(avgs[i] - offset * attenuation_factor, 0.0);
     }
     return;
 }
@@ -229,7 +229,31 @@ void Spectrometer::InitializeLEDMatrix(char* config_path)
     fprintf(stderr, "Successfully Initialized LED Matrix\n");   
     return;
 }
-void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels, bool print_black)
+void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BIN_COUNT])
+{
+    int i=0, j=0;
+    int low_max = 999999999, high_max = 0, bin_max = 0;
+    for(j=0; j<BIN_COUNT; j++)
+    {
+        bin_max = 0;
+        for(i=0; i<TOTAL_BIN_DEPTH; i++)
+        {
+            high_max = fmax(high_max, bins[i][j]);
+            bin_max = fmax(bin_max, bins[i][j]);
+        }
+        low_max = fmin(low_max, bin_max);
+    }
+    int range = high_max-low_max;
+    for(i=0; i<TOTAL_BIN_DEPTH; i++)
+    {
+        for(j=0; j<BIN_COUNT; j++)
+        {
+            normalized_bins[i][j] = 100.0*((float)(bins[i][j] - low_max)/(float)range);
+        }
+    }
+    return;
+}
+void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels)
 {
     // intialize parameters
 	int col_width = (float)this->panelWidth/(float)BIN_COUNT;
@@ -475,13 +499,14 @@ void Spectrometer::Start()
     this->running = true;
     this->canvas->Fill(0, 0, 0);
     this->canvas->SetPixel(1, 1, 50, 50, 50);
-    int bins[BIN_DEPTH][BIN_COUNT];
+    int bins[TOTAL_BIN_DEPTH][BIN_COUNT];
+    int normalized_bins[TOTAL_BIN_DEPTH][BIN_COUNT];
     int i=0, j=0;
-    for(i=0; i<BIN_DEPTH; i++)
+    for(i=0; i<TOTAL_BIN_DEPTH; i++)
     {
         for(j=0; j<BIN_COUNT; j++)
         {
-            bins[i][j] = 0;   
+            bins[i][j] = normalized_bins[i][j] = 0;   
         }
     }
     // create buffers
@@ -504,7 +529,7 @@ void Spectrometer::Start()
     fprintf(stderr, "Starting display loop\n");
     while((err = snd_pcm_readi (pcm_handle, buf, buffer_size)) == buffer_size)
     {
-        // intialize data
+        // reset pixels (don't reset excluded pixels)
         for(i=0; i<this->panelWidth; i++)
         {
             for(j=0; j<this->panelHeight; j++)
@@ -518,7 +543,7 @@ void Spectrometer::Start()
             break;
         }
         // move bins
-        for(i=BIN_DEPTH-1; i>0; i--)
+        for(i=TOTAL_BIN_DEPTH-1; i>0; i--)
         {
             for(j=0; j<BIN_COUNT; j++)
             {
@@ -527,6 +552,9 @@ void Spectrometer::Start()
         }
         // retrieve new bins
         this->GetBins(buf, &bins[0][0], true);
+        
+        // normalize bins (based on history)
+        this->NormalizeBins(bins, normalized_bins);
 
         // get time
         struct timespec time;
@@ -552,13 +580,13 @@ void Spectrometer::Start()
 		switch(this->displayMode)
 		{
 			case Bars:
-				this->PrintBars(bins, pixels, true);
+				this->PrintBars(normalized_bins, pixels);
 				break;
 			case Bitmap:
-				this->PrintBitmap(bins, pixels, this->lib_logo);
+				this->PrintBitmap(normalized_bins, pixels, this->lib_logo);
 				break;
 			case Radial:
-				this->PrintRadial(bins, pixels);
+				this->PrintRadial(normalized_bins, pixels);
 				break;
 			default:
 				break;
