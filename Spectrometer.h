@@ -40,6 +40,10 @@
 #define TOTAL_BIN_DEPTH 32
 // history count for each frequency bin (for display)
 #define BIN_DEPTH 8
+// number of "fan blades" per bin value
+#define RADIAL_FAN_COUNT 8
+// angle between each radial "fan blade" (angle = pi/value)
+#define RADIAL_FAN_SPACING 32.0
 // capture sample rate
 #define SAMP_RATE 11025
 

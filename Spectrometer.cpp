@@ -61,7 +61,7 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
         }
     }
     float attenuation_factor = 1.0;
-    float offset = 80.0; // -90 dBs at the lowest range
+    float offset = 80.0; // -dBs at the lowest frequency bin
     for(i=0; i<BIN_COUNT; i++)
     {
 		if(counts[i] ==0)
@@ -72,7 +72,7 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
         if(logarithmic)
             avgs[i] = 20.0 * log10(avgs[i]);
 		// reduce low frequency impact ([low_freq] 1.0 -> 0.0 [high freq]   sqrt function attenuation factor)
-        attenuation_factor = sqrt((float)(BIN_COUNT - i)/(float)BIN_COUNT);
+        attenuation_factor = pow((float)(BIN_COUNT - i)/(float)BIN_COUNT, 2.0);
         bins[i] = fmax(avgs[i] - offset * attenuation_factor, 0.0);
     }
     return;
@@ -244,11 +244,23 @@ void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BI
         low_max = fmin(low_max, bin_max);
     }
     int range = high_max-low_max;
+    // max out at 90% 
+    // TODO: 90.0 or 100.0 nominal max?
+    float nominal_max = 100.0, ratio = 0.5;
     for(i=0; i<TOTAL_BIN_DEPTH; i++)
     {
         for(j=0; j<BIN_COUNT; j++)
         {
-            normalized_bins[i][j] = 100.0*((float)(bins[i][j] - low_max)/(float)range);
+            // ratio of 0.0 -> 1.0
+            ratio = (float)(bins[i][j] - low_max)/(float)range;
+            /* // NOTE: may be a bad idea for general use, but a good idea for certain styles?
+            // change ratio to "S curve" which favors peaks and attenuates valleys (still 0.0 -> 1.0)
+            if(ratio < 0.5)
+                ratio = pow(ratio, 2.0);
+            else
+                ratio = sqrt(ratio);
+            */
+            normalized_bins[i][j] = nominal_max*ratio;
         }
     }
     return;
@@ -395,39 +407,47 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels)
 {
 	// intialize parameters
     int i=0,j=0,k=0,r=0,g=0,b=0,x=0,y=0;
-    float freq_ratio=0.0,amplitude_ratio=0.0,gain=0.0,base_angle=0.0,angle=0.0;
+    float freq_ratio=0.0,amplitude_ratio=0.0,decay=0.0,base_angle=0.0,angle=0.0,red_gain=1.0,blue_gain=1.0,green_gain=1.0;
     this->canvas->SetPixel(31, 15, 0, 0, 0);
     pixels[31][15] = true;
 	// iterate through bins depthwise
     for(i=0; i<BIN_DEPTH; i++)
     {
-		// calculate gain (1 -> 0) 
-		gain = (float)(BIN_DEPTH-i)/(float)BIN_DEPTH;
+		// calculate decay (1 -> 0) 
+		decay = (float)(BIN_DEPTH-i)/(float)BIN_DEPTH;
+        
 		// iterate through bins
         for(j=0; j<BIN_COUNT; j++)
         {
-			// calculate ratios
-			freq_ratio = (float)(j+1)/(float)BIN_COUNT;
-            amplitude_ratio = (float)bins[i][j] / CENTER_AMPLITUDE;
-			// calculate color(s) (based on amplitude)
-			g = 100.0*amplitude_ratio*gain;
-            base_angle = freq_ratio * M_PI * 2.0 + M_PI/2.0;
-			// iterate through set of close angles
-			for(k =0; k<4; k++)
+			// frequency ratio ([low frequency] 0.0 -> 1.0 [high frequency])
+			freq_ratio = (float)(j)/(float)BIN_COUNT;
+            // red gain ([low frequency] 0.0 -> 2.0 [high frequency])
+            red_gain = freq_ratio*2.0;
+            // green gain ([low frequency] 0.0 -> 2.0 [center frequency] -> 0.0 [high frequency])
+            green_gain = ((float)(BIN_COUNT/2-abs(j-BIN_COUNT/2))/(float)(BIN_COUNT/2))*2.0;
+            // blue gain ([low frequency] 2.0 -> 0.0 [high frequency])
+            blue_gain = (1.0 - freq_ratio)*2.0; 
+            // amplitude ratio ([low amplitude] 0.0 -> 1.0 [high amplitude])
+            amplitude_ratio = (float)(bins[i][j]) / 100.0;
+			// angle ([low frequency] 0 rad -> 2pi rad [high frequency])
+            base_angle = freq_ratio * M_PI * 2.0;
+			// iterate through set of close angles (i.e. "fan out")
+			for(k =0; k<RADIAL_FAN_COUNT; k++)
 			{
-				// calculate angle (based on frequency)
-				angle = base_angle + (M_PI*(k-2))/16.0;
-				// calculate output coordinates
-				x = abs((int)(31 + 32.0 * sin(angle) * amplitude_ratio))%this->panelWidth;
-				y = abs((int)(15 + 16.0 * cos(angle) * amplitude_ratio))%this->panelHeight;
+				// fan angle
+				angle = base_angle + (M_PI*(k-2))/RADIAL_FAN_SPACING;
+				// calculate output coordinates (center point + frequency and amplitude vectors)
+				x = abs((int)((float)this->panelWidth/2.0 + (float)(this->panelWidth/2) * sin(angle)*amplitude_ratio))%this->panelWidth;
+				y = abs((int)((float)this->panelHeight/2.0 + (float)(this->panelHeight/2) * cos(angle)*amplitude_ratio))%this->panelHeight;
+                // calculate color(s) (based on frequency and age)
+                r = 100.0*red_gain*decay;
+                b = 100.0*blue_gain*decay;
+                g = 100.0*green_gain*decay;
 				// check if already written
-				if(!pixels[x][y])
+				if(!pixels[x][y] && (r > 40 || g > 40 || b > 40))
 				{
-					// calculate color(s) (based on frequency)
-					r = 150.0*gain * (float)(x)/(float)(this->panelWidth/2);
-					b = 150.0*gain * (float)(y)/(float)(this->panelHeight/2);
 					// draw
-					this->canvas->SetPixel(x, y, r, b, g);
+					this->canvas->SetPixel(x, y, r, g, b);
 					pixels[x][y] = true;
 				}
 			}
