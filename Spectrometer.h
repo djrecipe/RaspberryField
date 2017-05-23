@@ -22,11 +22,12 @@
 #include "gpu_fft.h"
 #include "GridTransformer.h"
 #include "mailbox.h"
+#include "RandomSequenceOfUnique.h"
 
 // capture device
 #define PCM_DEVICE "plughw:1,0"
 // 'center' amplitude (db) from which gain multipliers are derived
-#define CENTER_AMPLITUDE 40.0
+#define CENTER_AMPLITUDE 30.0
 // number of fft jobs (always 1?)
 #define FFT_JOBS 1
 // fft iterations
@@ -40,8 +41,11 @@
 // capture sample rate
 #define SAMP_RATE 11025
 
+
 class Spectrometer
 {
+	enum DisplayMode { Bars=0, Bitmap=1, Radial=2 };
+	
     public:
     Spectrometer(char* config_path);
     ~Spectrometer();
@@ -62,20 +66,27 @@ class Spectrometer
     rgb_matrix::GPIO io;
     GridTransformer grid;
     rgb_matrix::RGBMatrix* canvas;
-    bool** pixels;
+	
+	RandomSequenceOfUnique* uniqueXSequence;
+	RandomSequenceOfUnique* uniqueYSequence;
+	
+	DisplayMode displayMode;
 	
 	unsigned char* lib_logo;
     
     void GetBins(short* buffer, int* bins, bool logarithmic);
+	void GetExcludedPixels(bool** exclude);
+	int GetRandomNumber(int min, int max);
     void InitializeAudioDevice();
     void InitializeLEDMatrix(char* config_path);
     void InitializeFFT();
     void PrintBars(int bins[][BIN_COUNT], bool** pixels, bool print_black);
     void PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned char* data);
-    void PrintBlack(bool** pixels);
+    void PrintBlack(bool** pixels, bool** exclude);
 	void PrintRadial(int bins[][BIN_COUNT], bool** pixels);
     void PrintText(int x, int y, const std::string& message, int r = 255, int g = 255, int b = 255);
 	void ReadBitmap(char* filename, unsigned char* data);
+	void RemoveExclusions(bool** exclude);
       
 };
 

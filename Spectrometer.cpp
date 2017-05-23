@@ -3,17 +3,20 @@
 using namespace std;
 using namespace rgb_matrix;
 
+
 Spectrometer::Spectrometer(char* config_path)
 {
+	srand (time(NULL));
+	this->displayMode = Bars;
     this->running = false;
+    unsigned int seed = (unsigned int) time(NULL);
+	this->uniqueXSequence = new RandomSequenceOfUnique(seed, seed+1);
+	usleep(10);
+	seed = (unsigned int) time(NULL);
+	this->uniqueYSequence= new RandomSequenceOfUnique(seed, seed+1);
     this->InitializeAudioDevice();
     this->InitializeFFT();
     this->InitializeLEDMatrix(config_path);   
-    this->pixels = new bool*[this->panelWidth];
-    for(int i=0; i<this->panelWidth; i++)
-    {
-        this->pixels[i] = new bool[this->panelHeight];
-    }
     this->lib_logo = new unsigned char[this->panelWidth * this->panelHeight * 3];
     this->ReadBitmap("lib-logo.bmp", this->lib_logo);
     return;
@@ -67,11 +70,31 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
         // convert to db
         if(logarithmic)
             avgs[i] = 20.0 * log10(avgs[i]);
-        // normalize
+		// reduce low frequency impact
         ratio = sqrt((float)(BIN_COUNT - i)/(float)BIN_COUNT + 0.5);
-        bins[i] = fmin(fmax(avgs[i] - 90.0 * ratio, 0.0) * 1.5, 100.0);
+        // normalize
+        bins[i] = fmin(fmax(avgs[i] - 90.0 * ratio, 0.0) * 1.3, 100.0);
     }
     return;
+}
+
+void Spectrometer::GetExcludedPixels(bool** exclude)
+{
+	int x =0, y =0;
+	// create new
+	for(x=0; x<this->panelWidth; x++)
+	{
+		for(y=0; y<this->panelHeight; y++)
+		{
+			exclude[x][y] = true;
+		}
+	}
+	return;	
+}
+
+int Spectrometer::GetRandomNumber(int min, int max)
+{
+	return rand() % max + min;
 }
 
 void Spectrometer::InitializeAudioDevice()
@@ -86,12 +109,14 @@ void Spectrometer::InitializeAudioDevice()
 	}
 
     /* Allocate parameters object and fill it with default values*/
+	fprintf(stderr, "\tAllocating parameters object\n");
     snd_pcm_hw_params_t *params;
     if((err = snd_pcm_hw_params_malloc(&params)) < 0)
     {
         fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n", snd_strerror (err));
         exit (1);
     }
+	fprintf(stderr, "Initializing parameters object\n");
     if((err = snd_pcm_hw_params_any(pcm_handle, params)) < 0)
     {
         fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n",
@@ -247,7 +272,7 @@ void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels, bool print_bl
     }
 	return;
 }
-void Spectrometer::PrintBlack(bool** pixels)
+void Spectrometer::PrintBlack(bool** pixels, bool** exclude)
 {
     int x=0,y=0;
     // iterate across
@@ -257,7 +282,7 @@ void Spectrometer::PrintBlack(bool** pixels)
         for(y=0; y<this->panelHeight; y++)
         {
             // check if pixel is already occupied
-            if(pixels[x][y])
+            if(pixels[x][y] || exclude[x][y])
                 continue;
             // draw
             this->canvas->SetPixel(x, y, 0, 0, 0);
@@ -290,7 +315,7 @@ void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned ch
                 for(j=0; j<BIN_COUNT; j++)
                 {
                     // calculate base gain (based on bin amplitude)
-                    bin_gain = (float)bins[i][j] / CENTER_AMPLITUDE;
+                    bin_gain = ((float)bins[i][j] / CENTER_AMPLITUDE)*1.3;
                     // calculate red gain (increases with bin frequency)
                     red_gain += bin_gain * ((float)(j+1)/(float)BIN_COUNT+0.5);
                     // calculate green gain (increases towards center frequency)
@@ -308,7 +333,7 @@ void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned ch
                 r = (float)data[index]*red_gain*decay;
                 g = (float)data[index+1]*green_gain*decay;
                 b = (float)data[index+2]*blue_gain*decay;
-                if(r > 20 || g > 20 || b > 20)
+                if(r > 40 || g > 40 || b > 40)
                 {
                     this->canvas->SetPixel(x, y, r, g, b);
                     pixels[x][y] = true;
@@ -345,7 +370,6 @@ void Spectrometer::PrintText(int x, int y, const string& message, int r, int g, 
 void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels)
 {
 	// intialize parameters
-	int col_width = (float)this->panelWidth/(float)BIN_COUNT;
     int i=0,j=0,k=0,r=0,g=0,b=0,x=0,y=0;
     float freq_ratio=0.0,amplitude_ratio=0.0,gain=0.0,base_angle=0.0,angle=0.0;
     this->canvas->SetPixel(31, 15, 0, 0, 0);
@@ -426,6 +450,24 @@ void Spectrometer::ReadBitmap(char* filename, unsigned char* data)
     fprintf(stderr, "Successfully read bitmap\n");
     return;  
 }
+void Spectrometer::RemoveExclusions(bool** exclude)
+{
+	int x = this->panelWidth+1, y =this->panelHeight+1;
+	for(int i=0; i<50; i++)
+	{
+		while(x>=this->panelWidth)
+		{
+			x = this->uniqueXSequence->next();
+		}
+		while(y>=this->panelHeight)
+		{
+			y = this->uniqueYSequence->next();
+		}
+		fprintf(stderr, "%d,%d\n",x,y);
+		exclude[x][y] = false;
+	}
+	return;
+}
 void Spectrometer::Start()
 {    
     fprintf(stderr, "Initializing display loop\n");
@@ -442,10 +484,21 @@ void Spectrometer::Start()
             bins[i][j] = 0;   
         }
     }
-    // create buffer
+    // create buffers
     int err;
     int buffer_size = 1<<FFT_LOG;
     short buf[buffer_size];
+    bool** pixels = new bool*[this->panelWidth];
+    bool** exclude = new bool*[this->panelWidth];
+    for(int i=0; i<this->panelWidth; i++)
+    {
+        pixels[i] = new bool[this->panelHeight];
+        exclude[i] = new bool[this->panelHeight];
+		for(j=0; j<this->panelHeight; j++)
+		{
+			pixels[i][j] = exclude[i][j] = false;
+		}
+    }
     // loop
     fprintf(stderr, "Successfully initialized display loop\n");
     fprintf(stderr, "Starting display loop\n");
@@ -456,7 +509,7 @@ void Spectrometer::Start()
         {
             for(j=0; j<this->panelHeight; j++)
             {
-                pixels[i][j] = false;
+				pixels[i][j] = exclude[i][j];
             }
         }
         if(!this->running)
@@ -478,25 +531,51 @@ void Spectrometer::Start()
         // get time
         struct timespec time;
         clock_gettime(CLOCK_REALTIME, &time);
+		
+        if(time.tv_sec%60<=10 && this->displayMode != Bitmap)
+        {
+			this->displayMode = Bitmap;
+			//this->GetExcludedPixels(exclude);
+        }
+		else if(time.tv_sec%60 >10 && time.tv_sec%60<=30 && this->displayMode != Radial)
+		{
+			this->displayMode = Radial;
+			//this->GetExcludedPixels(exclude);
+		}
+        else if(time.tv_sec%60>30 && this->displayMode != Bars)
+        {  
+			this->displayMode = Bars;
+			//this->GetExcludedPixels(exclude);
+        }
     
         // display
-        if(time.tv_sec%60<10)
-        {
-            this->PrintBitmap(bins, pixels, this->lib_logo);
-        }
-		else if(time.tv_sec%60<30)
+		switch(this->displayMode)
 		{
-            this->PrintRadial(bins, pixels);
+			case Bars:
+				this->PrintBars(bins, pixels, true);
+				break;
+			case Bitmap:
+				this->PrintBitmap(bins, pixels, this->lib_logo);
+				break;
+			case Radial:
+				this->PrintRadial(bins, pixels);
+				break;
+			default:
+				break;
 		}
-        else
-        {  
-            this->PrintBars(bins, pixels, true);
-        }
-        this->PrintBlack(pixels);
+        this->PrintBlack(pixels, exclude);
+		//this->RemoveExclusions(exclude);
         // sleep
-        usleep(10000);
+        usleep(1000);
     }
     fprintf(stderr, "Exiting display loop\n");
+    for(int i=0; i<this->panelWidth; i++)
+    {
+        delete[] pixels[i];
+		delete[] exclude[i];
+    }
+    delete[] pixels;
+	delete[] exclude;
     return;
 }
 
@@ -522,19 +601,14 @@ Spectrometer::~Spectrometer()
     fprintf(stderr, "\tReleasing fft data\n");
     gpu_fft_release(this->fft);
     // delete pointers
+	delete this->uniqueXSequence;
+	delete this->uniqueYSequence;
     fprintf(stderr, "\tDeleting logo pointer\n");
     delete this->lib_logo;
     fprintf(stderr, "\tDeleting canvas pointer\n");
     delete this->canvas;
     fprintf(stderr, "\tDeleting LED configuration pointer\n");
     delete this->config;
-    for(int i=0; i<this->panelWidth; i++)
-    {
-        fprintf(stderr, "\tDeleting pixels pointer %d of %d\n", i+1, this->panelWidth);
-        delete[] this->pixels[i];
-    }
-    fprintf(stderr, "\tDeleting pixel pointer\n");
-    delete[] this->pixels;
     fprintf(stderr, "Successfully cleaned up\n");
     return;
 }
