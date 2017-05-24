@@ -74,9 +74,6 @@ class Spectrometer
     GridTransformer grid;
     rgb_matrix::RGBMatrix* canvas;
 	
-	RandomSequenceOfUnique* uniqueXSequence;
-	RandomSequenceOfUnique* uniqueYSequence;
-	
 	DisplayMode displayMode;
 	
 	unsigned char* lib_logo;
@@ -94,7 +91,7 @@ class Spectrometer
 	void PrintRadial(int bins[][BIN_COUNT], bool** pixels, float seconds);
     void PrintText(int x, int y, const std::string& message, int r = 255, int g = 255, int b = 255);
 	void ReadBitmap(char* filename, unsigned char* data);
-	void RemoveExclusions(bool** exclude);
+	//void RemoveExclusions(bool** exclude);
       
 };
 

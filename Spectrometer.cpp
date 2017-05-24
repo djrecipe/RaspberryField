@@ -9,11 +9,6 @@ Spectrometer::Spectrometer(char* config_path)
 	srand (time(NULL));
 	this->displayMode = Bars;
     this->running = false;
-    unsigned int seed = (unsigned int) time(NULL);
-	this->uniqueXSequence = new RandomSequenceOfUnique(seed, seed+1);
-	usleep(10);
-	seed = (unsigned int) time(NULL);
-	this->uniqueYSequence= new RandomSequenceOfUnique(seed, seed+1);
     this->InitializeAudioDevice();
     this->InitializeFFT();
     this->InitializeLEDMatrix(config_path);   
@@ -421,7 +416,7 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels, float secon
             // blue gain ([low frequency] 2.0 -> 0.0 [high frequency])
             blue_gain = (1.0 - freq_ratio)*2.0; 
             // amplitude ratio ([low amplitude] 0.0 -> 1.0 [high amplitude])
-            amplitude_ratio = (float)(bins[i][j]) / 120.0;
+            amplitude_ratio = (float)(bins[i][j]) / 80.0;
 			// angle ([low frequency] 0 rad -> 2pi rad [high frequency])
             base_angle = freq_ratio * M_PI * 2.0+angle_offset;
 			// calculate color(s) (based on frequency and age)
@@ -440,10 +435,12 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels, float secon
 				//y = abs((int)((float)this->panelHeight/2.0 + (float)(this->panelHeight/2) * cos(angle)*amplitude_ratio))%this->panelHeight;
 				x_vector = (int)((float)(this->panelWidth/2) * sin(angle)*amplitude_ratio);
 				y_vector = (int)((float)(this->panelHeight/2) * cos(angle)*amplitude_ratio);
-				for(m=4; m>0; m--)
+				float factor = 0.9;
+				for(m=0; m<8; m++)
 				{
-					x = (int)((float)this->panelWidth/2.0 + (float)x_vector/(float)m);
-					y = (int)((float)this->panelHeight/2.0 + (float)y_vector/(float)m);
+					x = (int)((float)this->panelWidth/2.0 + (float)x_vector*factor);
+					y = (int)((float)this->panelHeight/2.0 + (float)y_vector*factor);
+					factor *= factor;
 					// NOTE: the approach of discarding out-of-range pixels with this mode seems to look better than trying to limit or apply modulus
 					if(x<0 || y < 0 || x>=this->panelWidth || y >=this->panelHeight)
 						continue;
@@ -499,6 +496,7 @@ void Spectrometer::ReadBitmap(char* filename, unsigned char* data)
     fprintf(stderr, "Successfully read bitmap\n");
     return;  
 }
+/*
 void Spectrometer::RemoveExclusions(bool** exclude)
 {
 	int x = this->panelWidth+1, y =this->panelHeight+1;
@@ -516,7 +514,7 @@ void Spectrometer::RemoveExclusions(bool** exclude)
 		exclude[x][y] = false;
 	}
 	return;
-}
+}*/
 void Spectrometer::Start()
 {    
     fprintf(stderr, "Initializing display loop\n");
@@ -585,21 +583,21 @@ void Spectrometer::Start()
 
         seconds = (float)( clock () - begin_time ) / (float)CLOCKS_PER_SEC;
 		
-        if((int)seconds%60<=10 && this->displayMode != Bitmap)
-        {
-			this->displayMode = Bitmap;
+        //if((int)seconds%60<=10 && this->displayMode != Bitmap)
+        //{
+		//	this->displayMode = Bitmap;
 			//this->GetExcludedPixels(exclude);
-        }
-		else if((int)seconds%60 >10 && (int)seconds%60<=30 && this->displayMode != Radial)
-		{
+        //}
+		//else if((int)seconds%60 >10 && (int)seconds%60<=30 && this->displayMode != Radial)
+		//{
 			this->displayMode = Radial;
 			//this->GetExcludedPixels(exclude);
-		}
-        else if((int)seconds%60>30 && this->displayMode != Bars)
-        {  
-			this->displayMode = Bars;
+		//}
+        //else if((int)seconds%60>30 && this->displayMode != Bars)
+        //{  
+		//	this->displayMode = Bars;
 			//this->GetExcludedPixels(exclude);
-        }
+        //}
     
         // display
 		switch(this->displayMode)
@@ -653,9 +651,6 @@ Spectrometer::~Spectrometer()
     // release FFT
     fprintf(stderr, "\tReleasing fft data\n");
     gpu_fft_release(this->fft);
-    // delete pointers
-	delete this->uniqueXSequence;
-	delete this->uniqueYSequence;
     fprintf(stderr, "\tDeleting logo pointer\n");
     delete this->lib_logo;
     fprintf(stderr, "\tDeleting canvas pointer\n");
