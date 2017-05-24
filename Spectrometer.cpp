@@ -583,17 +583,17 @@ void Spectrometer::Start()
 
         seconds = (float)( clock () - begin_time ) / (float)CLOCKS_PER_SEC;
 		
-        if((int)seconds%60<=10 && this->displayMode != Bitmap)
+        if((int)seconds%60<=20 && this->displayMode != Bitmap)
         {
 			this->displayMode = Bitmap;
 			//this->GetExcludedPixels(exclude);
         }
-		else if((int)seconds%60 >10 && (int)seconds%60<=30 && this->displayMode != Radial)
+		else if((int)seconds%60>20 && (int)seconds%60<=40 && this->displayMode != Radial)
 		{
 			this->displayMode = Radial;
 			//this->GetExcludedPixels(exclude);
 		}
-        else if((int)seconds%60>30 && this->displayMode != Bars)
+        else if((int)seconds%60>40 && this->displayMode != Bars)
         {  
 			this->displayMode = Bars;
 			//this->GetExcludedPixels(exclude);
