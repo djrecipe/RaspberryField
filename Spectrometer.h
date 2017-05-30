@@ -24,6 +24,8 @@
 #include "mailbox.h"
 #include "RandomSequenceOfUnique.h"
 
+// amount of attenuation, in dB, of the lowest frequencies
+#define ATTENUATION_OFFSET 30.0
 // capture device
 #define PCM_DEVICE "plughw:1,0"
 // number of fft jobs (always 1?)
@@ -60,6 +62,7 @@ class Spectrometer
     
     int panelWidth = 0;
     int panelHeight = 0;
+	float seconds = 0.0;
     int mailbox;
     struct GPU_FFT *fft;
     
@@ -70,9 +73,6 @@ class Spectrometer
     rgb_matrix::GPIO io;
     GridTransformer grid;
     rgb_matrix::RGBMatrix* canvas;
-	
-	RandomSequenceOfUnique* uniqueXSequence;
-	RandomSequenceOfUnique* uniqueYSequence;
 	
 	DisplayMode displayMode;
 	
@@ -88,10 +88,10 @@ class Spectrometer
     void PrintBars(int bins[][BIN_COUNT], bool** pixels);
     void PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned char* data);
     void PrintBlack(bool** pixels, bool** exclude);
-	void PrintRadial(int bins[][BIN_COUNT], bool** pixels, timespec time);
+	void PrintRadial(int bins[][BIN_COUNT], bool** pixels, float seconds);
     void PrintText(int x, int y, const std::string& message, int r = 255, int g = 255, int b = 255);
 	void ReadBitmap(char* filename, unsigned char* data);
-	void RemoveExclusions(bool** exclude);
+	//void RemoveExclusions(bool** exclude);
       
 };
 
