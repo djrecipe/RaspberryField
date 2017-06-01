@@ -12,8 +12,8 @@ Spectrometer::Spectrometer(char* config_path)
     this->InitializeAudioDevice();
     this->InitializeFFT();
     this->InitializeLEDMatrix(config_path);   
-    this->lib_logo = new unsigned char[this->panelWidth * this->panelHeight * 3];
-    this->ReadBitmap("lib-logo.bmp", this->lib_logo);
+    this->logo = new unsigned char[this->panelWidth * this->panelHeight * 3];
+    this->ReadBitmap("chilluminati-logo.bmp", this->logo);
     return;
 }
 
@@ -598,7 +598,7 @@ void Spectrometer::Start()
 				this->PrintBars(normalized_bins, pixels);
 				break;
 			case Bitmap:
-				this->PrintBitmap(normalized_bins, pixels, this->lib_logo);
+				this->PrintBitmap(normalized_bins, pixels, this->logo);
 				break;
 			case Radial:
 				this->PrintRadial(normalized_bins, pixels, seconds);
@@ -644,7 +644,7 @@ Spectrometer::~Spectrometer()
     fprintf(stderr, "\tReleasing fft data\n");
     gpu_fft_release(this->fft);
     fprintf(stderr, "\tDeleting logo pointer\n");
-    delete this->lib_logo;
+    delete this->logo;
     fprintf(stderr, "\tDeleting canvas pointer\n");
     delete this->canvas;
     fprintf(stderr, "\tDeleting LED configuration pointer\n");

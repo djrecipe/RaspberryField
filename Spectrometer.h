@@ -74,7 +74,7 @@ class Spectrometer
 	
 	DisplayMode displayMode;
 	
-	unsigned char* lib_logo;
+	unsigned char* logo;
     
     void GetBins(short* buffer, int* bins, bool logarithmic);
 	void GetExcludedPixels(bool** exclude);
