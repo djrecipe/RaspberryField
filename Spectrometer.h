@@ -24,8 +24,6 @@
 #include "mailbox.h"
 #include "RandomSequenceOfUnique.h"
 
-// amount of attenuation, in dB, of the lowest frequencies
-#define ATTENUATION_OFFSET 30.0
 // capture device
 #define PCM_DEVICE "plughw:1,0"
 // number of fft jobs (always 1?)

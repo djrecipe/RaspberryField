@@ -44,23 +44,15 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
             if(frequency >= frequencies[j] && frequency < frequencies[j+1])
             {
 				value = sqrt(pow(this->fft->out[i].re, 2) + pow(this->fft->out[i].re, 2)); 
+                // convert to db
+                if(logarithmic)
+                {
+                    value = 20.0 * log10(value);
+                }
 				maxs[j] = fmax(maxs[j], value);
                 break;
             }
         }
-    }
-    float attenuation_factor = 1.0;
-    float offset = ATTENUATION_OFFSET; // -dBs at the lowest frequency bin
-    for(i=0; i<BIN_COUNT; i++)
-    {
-        // convert to db
-        if(logarithmic)
-		{
-			maxs[i] = 20.0 * log10(maxs[i]);
-		}
-		// reduce low frequency impact ([low_freq] 1.0 -> 0.0 [high freq]   sqrt function attenuation factor)
-        attenuation_factor = pow((float)(BIN_COUNT - i)/(float)BIN_COUNT, 2.0);
-		bins[i] = fmax(maxs[i] - offset * attenuation_factor, 0.0); 
     }
     return;
 }
