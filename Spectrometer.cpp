@@ -17,47 +17,43 @@ Spectrometer::Spectrometer(char* config_path)
     return;
 }
 
-void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
+void Spectrometer::GetBins(short* buffer, int* bins)
 {
+    // initialize parameters
     int full_count = 1<<FFT_LOG;
     float frequencies[BIN_COUNT + 1]= {20.0,50.0,100.0,150.0,200.0,250.0,300.0,350.0,400.0,500.0,600.0,750.0,1000.0,2000.0,3000.0,5000.0,7500.0};
 	float maxs[BIN_COUNT];
-	float value = 0.0;
+	float value = 0.0;  
+    int i=0, j=0;
     
-    int i=0,j=0;
-    
-    // input buffer
+    // assign fft input
     for (i=0; i<full_count; i++)
     {
         fft->in[i].re = (float)buffer[i];
         fft->in[i].im =  0.0;
     }
     
-    // execute
+    // execute fft
     gpu_fft_execute(this->fft); // call one or many times
 
+    // calculate results
     for(i=0; i<full_count/2; i++)
     {
+        // calculate frequency
         float frequency = (float)i * ((float)(SAMP_RATE)/(float)(full_count));
+        // iterate through frequency bins
+        // sort results into discrete frequency bins
         for(j=0; j<BIN_COUNT; j++)
         {
             if(frequency >= frequencies[j] && frequency < frequencies[j+1])
             {
+                // calculate result vector
 				value = sqrt(pow(this->fft->out[i].re, 2) + pow(this->fft->out[i].re, 2)); 
 				maxs[j] = fmax(maxs[j], value);
                 break;
             }
         }
     }
-	for(i=0; i<BIN_COUNT; i++)
-	{
-		// convert to db
-		if(logarithmic)
-		{
-			maxs[i] = 20.0 * log10(maxs[i]);
-		}
-		bins[i] = fmax(maxs[i], 0.0); 
-	}
     return;
 }
 
@@ -202,33 +198,61 @@ void Spectrometer::InitializeLEDMatrix(char* config_path)
     fprintf(stderr, "Successfully Initialized LED Matrix\n");   
     return;
 }
-void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BIN_COUNT])
+void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BIN_COUNT], FFTOptions options)
 {
+    // initialize parameters
     int i=0, j=0;
-    int min = 999999999, max = 0, bin_max = 0;
+    int min = 999999999, max = -999999999, bin_max = -999999999;
+    float component1 = 0.0, component2 = 0.0;
+    // calculate highest and lowest peaks of a given frequency bin
     for(j=0; j<BIN_COUNT; j++)
     {
+        // reset current frequency bin max
 		bin_max = 0;
         for(i=0; i<TOTAL_BIN_DEPTH; i++)
         {
+            // convert to db
+            if(options &~ Logarithmic)
+            {
+                bins[i][j] = 20.0 * log10(bins[i][j]);
+            }
+            // ignore negative values/db
+            bins[i][j] = fmax(bins[i][j], 0);
+            // apply sigmoid approximation (significant attenutation to x < 50db; moderate gain to 50db < x < 100db; slight attenutation to x > 100db)
+            if(options &~ Sigmoid)
+            {               
+                component1 = fmin(pow((float)(bins[i][j]+5.0)/15.0, 3.0), 50.0);
+                component2 = 7.0*sqrt(fmax(bins[i][j]-50.0, 0.0));
+                bins[i][j] = component1 + component2;
+            }
+            // calculate max for all history of current frequency bin
+			bin_max = fmax(bin_max, bins[i][j]);
+            // calculate max for all history of all frequency bins
 			max = fmax(max, bins[i][j]);
-			bin_max = fmax(bin_max, bins[i][j]); 
         }
+        // calculate smallest peak occurring to any given frequency bin over all history
         min = fmin(min, bin_max);
     }
+    // calculate range 
     int range = max-min;
-    // max out at 90% 
-    // TODO: 90.0 or 100.0 nominal max?
     float nominal_max = 100.0, ratio = 0.5;
     for(i=0; i<TOTAL_BIN_DEPTH; i++)
     {
         for(j=0; j<BIN_COUNT; j++)
         {
-            // ratio of 0.0 -> 1.0
-			ratio = (float)(bins[i][j] - min)/(float)range;
-			ratio = fmax(ratio, 0.0);
-			//fprintf(stderr, "%f\n", ratio);
-            normalized_bins[i][j] = nominal_max*ratio;
+            if(options &~ Autoscale)
+            {
+                // calculate ratio (0.0 -> 1.0)
+                ratio = (float)(bins[i][j] - min)/(float)range;
+                // cull negative values (amplitudes which are underrange)
+                ratio = fmax(ratio, 0.0);
+                //fprintf(stderr, "%f\n", ratio);
+                normalized_bins[i][j] = nominal_max*ratio;
+            }
+            else
+            {
+                normalized_bins[i][j] = bins[i][j];
+            }
         }
     }
     return;
@@ -291,18 +315,14 @@ void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], unsigned char * data)
         {
             // calculate base gain (based on bin amplitude) (0.0 -> 2.0)
             bin_gain = (float)bins[i][j] / 50.0;
-            // (increases with bin frequency)
+            // increases with bin frequency (0.1 -> 1.0)
             blue_gain = fmax(bin_gain * ((float)(j+1)/(float)BIN_COUNT)*decay, blue_gain);
-            // (increases towards center frequency)
-            green_gain = fmax(bin_gain * ((float)(BIN_COUNT/2-abs(j-BIN_COUNT/2))/(float)(BIN_COUNT/2))*decay, green_gain);
-            // (decreases with bin frequency)
+            // increases towards center frequency (0.1 -> 1.0 -> 0.1)
+            green_gain = fmax(bin_gain * ((float)(BIN_COUNT/2-abs((j+1)-BIN_COUNT/2))/(float)(BIN_COUNT/2))*decay, green_gain);
+            // decreases with bin frequency (1.0 -> 0.1)
             red_gain = fmax(bin_gain * ((float)(BIN_COUNT - j)/(float)BIN_COUNT)*decay, red_gain); 
         }
     }  
-    // gains will be 0.0 -> 2.0, square them to exaggerate peaks and attenuate valleys
-    red_gain = pow(red_gain, 2.0);
-    green_gain = pow(green_gain, 2.0);
-    blue_gain = pow(blue_gain, 2.0);
     // iterate through each pixel in the bitmap
     for(x =0; x<this->panelWidth; x++)
     {
@@ -490,10 +510,8 @@ void Spectrometer::Start()
             }
         }
         // retrieve new bins
-        this->GetBins(buf, &bins[0][0], true);
+        this->GetBins(buf, &bins[0][0]);
         
-        // normalize bins (based on history)
-        this->NormalizeBins(bins, normalized_bins);
 
         seconds = (float)( clock () - begin_time ) / (float)CLOCKS_PER_SEC;
 		
@@ -512,6 +530,9 @@ void Spectrometer::Start()
 			this->displayMode = Bars;
 			this->grid->SetCutoff(0);
         }
+        
+        // normalize bins (based on history)
+        this->NormalizeBins(bins, normalized_bins, Logarithmic|Sigmoid|Autoscale);
     
         // display
 		switch(this->displayMode)

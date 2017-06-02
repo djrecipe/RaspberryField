@@ -49,6 +49,9 @@
 class Spectrometer
 {
 	enum DisplayMode { Bars=0, Bitmap=1, Radial=2 };
+    enum FFTOptions { None = 0, Logarithmic = 1, Sigmoid = 2, Autoscale = 3};
+    
+    inline FFTOptions operator|(FFTOptions a, FFTOptions b){return static_cast<FFTOptions>(static_cast<int>(a)|static_cast<int>(b));}
 	
     public:
     Spectrometer(char* config_path);
@@ -76,12 +79,12 @@ class Spectrometer
 	
 	unsigned char* logo;
     
-    void GetBins(short* buffer, int* bins, bool logarithmic);
+    void GetBins(short* buffer, int* bins);
 	int GetRandomNumber(int min, int max);
     void InitializeAudioDevice();
     void InitializeLEDMatrix(char* config_path);
     void InitializeFFT();
-    void NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BIN_COUNT]);
+    void NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BIN_COUNT], FFTOptions options);
     void PrintBars(int bins[][BIN_COUNT]);
     void PrintBitmap(int bins[][BIN_COUNT], unsigned char* data);
 	void PrintRadial(int bins[][BIN_COUNT], float seconds);
