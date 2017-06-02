@@ -31,9 +31,9 @@ public:
   int getParallelCount() const {
     return _parallel_count;
   }
-  GridTransformer getGridTransformer() const {
-    return GridTransformer(_display_width, _display_height, _panel_width,
-                           _panel_height, _chain_length, _panels);
+  GridTransformer* getGridTransformer() const
+  {
+		return new GridTransformer(_display_width, _display_height, _panel_width, _panel_height, _chain_length, _panels);
   }
   bool hasCropOrigin() const {
     return (_crop_x > -1) && (_crop_y > -1);

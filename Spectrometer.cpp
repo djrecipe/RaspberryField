@@ -44,31 +44,21 @@ void Spectrometer::GetBins(short* buffer, int* bins, bool logarithmic)
             if(frequency >= frequencies[j] && frequency < frequencies[j+1])
             {
 				value = sqrt(pow(this->fft->out[i].re, 2) + pow(this->fft->out[i].re, 2)); 
-                // convert to db
-                if(logarithmic)
-                {
-                    value = 20.0 * log10(value);
-                }
 				maxs[j] = fmax(maxs[j], value);
                 break;
             }
         }
     }
-    return;
-}
-
-void Spectrometer::GetExcludedPixels(bool** exclude)
-{
-	int x =0, y =0;
-	// create new
-	for(x=0; x<this->panelWidth; x++)
+	for(i=0; i<BIN_COUNT; i++)
 	{
-		for(y=0; y<this->panelHeight; y++)
+		// convert to db
+		if(logarithmic)
 		{
-			exclude[x][y] = true;
+			maxs[i] = 20.0 * log10(maxs[i]);
 		}
+		bins[i] = fmax(maxs[i], 0.0); 
 	}
-	return;	
+    return;
 }
 
 int Spectrometer::GetRandomNumber(int min, int max)
@@ -196,12 +186,16 @@ void Spectrometer::InitializeLEDMatrix(char* config_path)
     // Initialize Canvas
     this->canvas = new RGBMatrix(&io, height, chain_length, parallel_count); 
     this->grid = this->config->getGridTransformer();
+	// set cutoff (at least one color value must be greater than this value in order for the pixel to be displayed)
+    fprintf(stderr, "\tCutoff: %d\n", 80);
+	this->grid->SetCutoff(0);
     // set max pixel value (aka 'brightness')
-    this->grid.SetMaxBrightness(225);
+    fprintf(stderr, "\tBrightness: %d\n", 225);
+    this->grid->SetMaxBrightness(225);
     // turn on horizontal mirroring (due to incorrect wiring)
-    this->grid.SetMirrorX(true);
+    this->grid->SetMirrorX(true);
     // set grid transformer (for virtual calls)
-    this->canvas->SetTransformer(&grid);
+    this->canvas->SetTransformer(grid);
     // clear canvas
     this->canvas->Fill(0, 0, 0);
     
@@ -211,18 +205,18 @@ void Spectrometer::InitializeLEDMatrix(char* config_path)
 void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BIN_COUNT])
 {
     int i=0, j=0;
-    int low_max = 999999999, high_max = 0, bin_max = 0;
+    int min = 999999999, max = 0, bin_max = 0;
     for(j=0; j<BIN_COUNT; j++)
     {
-        bin_max = 0;
+		bin_max = 0;
         for(i=0; i<TOTAL_BIN_DEPTH; i++)
         {
-            high_max = fmax(high_max, bins[i][j]);
-            bin_max = fmax(bin_max, bins[i][j]);
+			max = fmax(max, bins[i][j]);
+			bin_max = fmax(bin_max, bins[i][j]); 
         }
-        low_max = fmin(low_max, bin_max);
+        min = fmin(min, bin_max);
     }
-    int range = high_max-low_max;
+    int range = max-min;
     // max out at 90% 
     // TODO: 90.0 or 100.0 nominal max?
     float nominal_max = 100.0, ratio = 0.5;
@@ -231,20 +225,15 @@ void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BI
         for(j=0; j<BIN_COUNT; j++)
         {
             // ratio of 0.0 -> 1.0
-            ratio = (float)(bins[i][j] - low_max)/(float)range;
-            /* // NOTE: may be a bad idea for general use, but a good idea for certain styles?
-            // change ratio to "S curve" which favors peaks and attenuates valleys (still 0.0 -> 1.0)
-            if(ratio < 0.5)
-                ratio = pow(ratio, 2.0);
-            else
-                ratio = sqrt(ratio);
-            */
+			ratio = (float)(bins[i][j] - min)/(float)range;
+			ratio = fmax(ratio, 0.0);
+			//fprintf(stderr, "%f\n", ratio);
             normalized_bins[i][j] = nominal_max*ratio;
         }
     }
     return;
 }
-void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels)
+void Spectrometer::PrintBars(int bins[][BIN_COUNT])
 {
     // intialize parameters
 	int col_width = (float)this->panelWidth/(float)BIN_COUNT;
@@ -269,7 +258,7 @@ void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels)
                 for(y=0; y<=bar_height && y<this->panelHeight; y++)
                 {
                     // check if pixel is already occupied
-                    if(pixels[x_index][y])
+                    if(this->grid->GetPixelState(x_index, y))
                         continue;
                     // calculate colors
                     r_gain = fmax(gain * ratio, 0.2);                 // increases with amplitude
@@ -280,33 +269,13 @@ void Spectrometer::PrintBars(int bins[][BIN_COUNT], bool** pixels)
                     b = 120.0*b_gain;
                     // draw
                     this->canvas->SetPixel(x_index, y, r, g, b);
-                    pixels[x_index][y] = true;
                 }
             }
         }
     }
 	return;
 }
-void Spectrometer::PrintBlack(bool** pixels, bool** exclude)
-{
-    int x=0,y=0;
-    // iterate across
-    for(x=0; x<this->panelWidth; x++)
-    {
-        // iterate upwards
-        for(y=0; y<this->panelHeight; y++)
-        {
-            // check if pixel is already occupied
-            if(pixels[x][y] || exclude[x][y])
-                continue;
-            // draw
-            this->canvas->SetPixel(x, y, 0, 0, 0);
-            pixels[x][y] = true;
-        }
-    }
-    return;
-}
-void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned char * data)
+void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], unsigned char * data)
 {
     // initialize parameters
     int x = 0, y = 0, r = 0, g = 0, b = 0, i = 0, j=0;
@@ -319,40 +288,42 @@ void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned ch
         for(y=0; y<this->panelHeight; y++)
         {
             // check if pixel is already occupied
-            if(pixels[x][y])
-                continue;
+            if(this->grid->GetPixelState(x,y))
+				continue;
+			int index = y * this->panelWidth * 3 + x*3;
+			if(((int)data[index] < 1) && ((int)data[index+1] < 1) && ((int)data[index+2] < 1))
+			{
+				this->grid->SetPixel(x, y, 0, 0, 0);
+				continue;
+			}
             // iterate through bin depthwise
             for(i=0; i<BIN_DEPTH; i++)
             {
+				if(this->grid->GetPixelState(x, y))
+					break;
                 // calculate decay (based on age)
-                decay = 5.0*(float)(BIN_DEPTH - i)/(float)BIN_DEPTH;
+                decay = (float)(BIN_DEPTH - i)/(float)BIN_DEPTH;
                 // iterate through bins and calculate gains
+				red_gain = 0.0;
+				blue_gain = 0.0;
+				green_gain = 0.0;
                 for(j=0; j<BIN_COUNT; j++)
                 {
                     // calculate base gain (based on bin amplitude)
                     bin_gain = (float)bins[i][j] / 50.0;
-                    // calculate red gain (increases with bin frequency)
-                    red_gain += bin_gain * ((float)(j+1)/(float)BIN_COUNT+0.5);
-                    // calculate green gain (increases towards center frequency)
-                    green_gain += bin_gain * ((float)(BIN_COUNT/2-abs(j-BIN_COUNT/2))/(float)(BIN_COUNT/2)+0.5);
-                    // calculate blue gain (decreases with bin frequency)
-                    blue_gain += bin_gain * ((float)(BIN_COUNT - j)/(float)BIN_COUNT+0.5); 
+                    // (increases with bin frequency)
+                    blue_gain = fmax(bin_gain * ((float)(j+1)/(float)BIN_COUNT)*decay, blue_gain);
+                    // (increases towards center frequency)
+                    green_gain = fmax(bin_gain * ((float)(BIN_COUNT/2-abs(j-BIN_COUNT/2))/(float)(BIN_COUNT/2))*decay, green_gain);
+                    // (decreases with bin frequency)
+                    red_gain = fmax(bin_gain * ((float)(BIN_COUNT - j)/(float)BIN_COUNT)*decay, red_gain); 
+					// calculate data index
+					// calculate color
                 }
-                red_gain = red_gain/(float)BIN_COUNT;
-                green_gain = green_gain/(float)BIN_COUNT;
-                blue_gain = blue_gain/(float)BIN_COUNT;
-                //fprintf(stderr, "%f,%f,%f\n", red_gain, green_gain, blue_gain);
-                // calculate data index
-                int index = y * this->panelWidth * 3 + x*3;
-                // calculate color
-                r = (float)data[index]*red_gain*decay;
-                g = (float)data[index+1]*green_gain*decay;
-                b = (float)data[index+2]*blue_gain*decay;
-                if(r > 40 || g > 40 || b > 40)
-                {
-                    this->canvas->SetPixel(x, y, r, g, b);
-                    pixels[x][y] = true;
-                }
+				r = (float)data[index]*pow(red_gain, 2.0);
+				g = (float)data[index+1]*pow(green_gain, 2.0);
+				b = (float)data[index+2]*pow(blue_gain, 2.0);
+				this->grid->SetPixel(x, y, r, g, b);
             }  
         }
     }
@@ -382,14 +353,14 @@ void Spectrometer::PrintText(int x, int y, const string& message, int r, int g, 
     x += 1;
   }
 }
-void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels, float seconds)
+void Spectrometer::PrintRadial(int bins[][BIN_COUNT], float seconds)
 {
 	// intialize parameters
     int i=0,j=0,k=0,m=0,r=0,g=0,b=0,x=0,y=0,x_vector=0,y_vector=0;
+	int base_vector = (this->panelWidth/2 + this->panelHeight/2)/2;
     float freq_ratio=0.0,amplitude_ratio=0.0,decay=0.0,base_angle=0.0,angle=0.0,red_gain=1.0,blue_gain=1.0,green_gain=1.0;
     float angle_offset = (M_PI * 2.0)*(seconds/5.0);
     this->canvas->SetPixel(31, 15, 0, 0, 0);
-    pixels[31][15] = true;
 	// iterate through bins depthwise
     for(i=0; i<BIN_DEPTH; i++)
     {
@@ -408,41 +379,30 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], bool** pixels, float secon
             // blue gain ([low frequency] 2.0 -> 0.0 [high frequency])
             blue_gain = (1.0 - freq_ratio)*2.0; 
             // amplitude ratio ([low amplitude] 0.0 -> 1.0 [high amplitude])
-            amplitude_ratio = (float)(bins[i][j]) / 80.0;
+            amplitude_ratio = (float)(bins[i][j]) / 100.0;
+			//fprintf(stderr,"%f\n",amplitude_ratio);
 			// angle ([low frequency] 0 rad -> 2pi rad [high frequency])
-            base_angle = freq_ratio * M_PI * 2.0+angle_offset;
+            base_angle = freq_ratio * M_PI * 2.0 +angle_offset;
 			// calculate color(s) (based on frequency and age)
 			r = 100.0*red_gain*decay;
 			b = 100.0*blue_gain*decay;
 			g = 100.0*green_gain*decay;
-			if(r < 40 && g < 40 && b < 40)
-				continue;
 			// iterate through set of close angles (i.e. "fan out")
 			for(k =0; k<RADIAL_FAN_COUNT; k++)
 			{
 				// fan angle
 				angle = base_angle + (M_PI*(k-2))/RADIAL_FAN_SPACING;
-				// calculate output coordinates (center point + frequency and amplitude vectors)
-				//x = abs((int)((float)this->panelWidth/2.0 + (float)(this->panelWidth/2) * sin(angle)*amplitude_ratio))%this->panelWidth;
-				//y = abs((int)((float)this->panelHeight/2.0 + (float)(this->panelHeight/2) * cos(angle)*amplitude_ratio))%this->panelHeight;
-				x_vector = (int)((float)(this->panelWidth/2) * sin(angle)*amplitude_ratio);
-				y_vector = (int)((float)(this->panelHeight/2) * cos(angle)*amplitude_ratio);
-				float factor = 0.9;
-				for(m=0; m<8; m++)
+				// calculate output coordinates (center point + vectors)
+				x_vector = (int)((float)base_vector * sin(angle)*amplitude_ratio);
+				y_vector = (int)((float)base_vector * cos(angle)*amplitude_ratio);
+				float factor = 0.01;
+				for(m=0; m<100; m++)
 				{
+					// start in middle, add x and y vectors
 					x = (int)((float)this->panelWidth/2.0 + (float)x_vector*factor);
 					y = (int)((float)this->panelHeight/2.0 + (float)y_vector*factor);
-					factor *= factor;
-					// NOTE: the approach of discarding out-of-range pixels with this mode seems to look better than trying to limit or apply modulus
-					if(x<0 || y < 0 || x>=this->panelWidth || y >=this->panelHeight)
-						continue;
-					// check if already written
-					if(!pixels[x][y])
-					{
-						// draw
-						this->canvas->SetPixel(x, y, r, g, b);
-						pixels[x][y] = true;
-					}
+					factor += 0.01;
+					this->canvas->SetPixel(x, y, r, g, b);
 				}
 			}
         }
@@ -488,25 +448,6 @@ void Spectrometer::ReadBitmap(char* filename, unsigned char* data)
     fprintf(stderr, "Successfully read bitmap\n");
     return;  
 }
-/*
-void Spectrometer::RemoveExclusions(bool** exclude)
-{
-	int x = this->panelWidth+1, y =this->panelHeight+1;
-	for(int i=0; i<50; i++)
-	{
-		while(x>=this->panelWidth)
-		{
-			x = this->uniqueXSequence->next();
-		}
-		while(y>=this->panelHeight)
-		{
-			y = this->uniqueYSequence->next();
-		}
-		fprintf(stderr, "%d,%d\n",x,y);
-		exclude[x][y] = false;
-	}
-	return;
-}*/
 void Spectrometer::Start()
 {    
     fprintf(stderr, "Initializing display loop\n");
@@ -528,17 +469,6 @@ void Spectrometer::Start()
     int err;
     int buffer_size = 1<<FFT_LOG;
     short buf[buffer_size];
-    bool** pixels = new bool*[this->panelWidth];
-    bool** exclude = new bool*[this->panelWidth];
-    for(int i=0; i<this->panelWidth; i++)
-    {
-        pixels[i] = new bool[this->panelHeight];
-        exclude[i] = new bool[this->panelHeight];
-		for(j=0; j<this->panelHeight; j++)
-		{
-			pixels[i][j] = exclude[i][j] = false;
-		}
-    }
     // loop
     fprintf(stderr, "Successfully initialized display loop\n");
     fprintf(stderr, "Starting display loop\n");
@@ -546,14 +476,6 @@ void Spectrometer::Start()
 	float seconds = 0.0;
     while((err = snd_pcm_readi (pcm_handle, buf, buffer_size)) == buffer_size)
     {
-        // reset pixels (don't reset excluded pixels)
-        for(i=0; i<this->panelWidth; i++)
-        {
-            for(j=0; j<this->panelHeight; j++)
-            {
-				pixels[i][j] = exclude[i][j];
-            }
-        }
         if(!this->running)
         {
             fprintf(stderr, "\nAborting\n");
@@ -575,50 +497,43 @@ void Spectrometer::Start()
 
         seconds = (float)( clock () - begin_time ) / (float)CLOCKS_PER_SEC;
 		
-        if((int)seconds%60<=20 && this->displayMode != Bitmap)
-        {
+        //if((int)seconds%60<=20 && this->displayMode != Bitmap)
+        //{
 			this->displayMode = Bitmap;
-			//this->GetExcludedPixels(exclude);
-        }
-		else if((int)seconds%60>20 && (int)seconds%60<=40 && this->displayMode != Radial)
-		{
-			this->displayMode = Radial;
-			//this->GetExcludedPixels(exclude);
-		}
-        else if((int)seconds%60>40 && this->displayMode != Bars)
-        {  
-			this->displayMode = Bars;
-			//this->GetExcludedPixels(exclude);
-        }
+			this->grid->SetCutoff(60);
+        //}
+		//else if((int)seconds%60>20 && (int)seconds%60<=40 && this->displayMode != Radial)
+		//{
+		//	this->displayMode = Radial;
+		//	this->grid->SetCutoff(0);
+		//}
+        //else if((int)seconds%60>40 && this->displayMode != Bars)
+        //{  
+		//	this->displayMode = Bars;
+		//	this->grid->SetCutoff(0);
+        //}
     
         // display
 		switch(this->displayMode)
 		{
 			case Bars:
-				this->PrintBars(normalized_bins, pixels);
+				this->PrintBars(normalized_bins);
 				break;
 			case Bitmap:
-				this->PrintBitmap(normalized_bins, pixels, this->logo);
+				this->PrintBitmap(normalized_bins, this->logo);
 				break;
 			case Radial:
-				this->PrintRadial(normalized_bins, pixels, seconds);
+				this->PrintRadial(normalized_bins, seconds);
 				break;
 			default:
 				break;
 		}
-        this->PrintBlack(pixels, exclude);
+        this->grid->FillRemaining(0,0,0);
 		//this->RemoveExclusions(exclude);
         // sleep
         usleep(1000);
     }
     fprintf(stderr, "Exiting display loop\n");
-    for(int i=0; i<this->panelWidth; i++)
-    {
-        delete[] pixels[i];
-		delete[] exclude[i];
-    }
-    delete[] pixels;
-	delete[] exclude;
     return;
 }
 
@@ -645,6 +560,8 @@ Spectrometer::~Spectrometer()
     gpu_fft_release(this->fft);
     fprintf(stderr, "\tDeleting logo pointer\n");
     delete this->logo;
+	fprintf(stderr, "\tDeleting grid pointer\n");
+	delete this->grid;
     fprintf(stderr, "\tDeleting canvas pointer\n");
     delete this->canvas;
     fprintf(stderr, "\tDeleting LED configuration pointer\n");

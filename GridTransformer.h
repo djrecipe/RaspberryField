@@ -21,7 +21,7 @@ public:
   GridTransformer();
   GridTransformer(int width, int height, int panel_width, int panel_height,
                   int chain_length, const std::vector<Panel>& panels);
-  virtual ~GridTransformer() {}
+  virtual ~GridTransformer();
 
   // Canvas interface implementation:
   virtual int width() const {
@@ -39,22 +39,27 @@ public:
     _source->Fill(red, green, blue);
   }
   
-  void SetMaxBrightness(int value);
-  void SetMirrorX(bool value);
-  void SetMirrorY(bool value);
-  
-  virtual void SetPixel(int x, int y, uint8_t red, uint8_t green, uint8_t blue);
+	// GridTransformer methods
+	void FillRemaining(uint8_t red, uint8_t green, uint8_t blue);
+	bool GetPixelState(int x, int y);
+	void SetCutoff(int value);
+	void SetMaxBrightness(int value);
+	void SetMirrorX(bool value);
+	void SetMirrorY(bool value);
+	
+	// Canvas methods
+	virtual void SetPixel(int x, int y, uint8_t red, uint8_t green, uint8_t blue);
+	virtual rgb_matrix::Canvas* Transform(rgb_matrix::Canvas* source);
 
-  // Transformer interface implementation:
-  virtual rgb_matrix::Canvas* Transform(rgb_matrix::Canvas* source);
-
-  // Other attribute accessors.
-  int getRows() const {
-    return _rows;
-  }
-  int getColumns() const {
-    return _cols;
-  }
+	// Other attribute accessors.
+	int getRows() const
+	{
+		return _rows;
+	}
+	int getColumns() const
+	{
+		return _cols;
+	}
 
 private:
   int _width,
@@ -64,10 +69,14 @@ private:
       _chain_length,
       _rows,
       _cols;
-  int maxBrightness;
-  bool mirrorX, mirrorY;
-  rgb_matrix::Canvas* _source;
-  std::vector<Panel> _panels;
+	int cutoff;
+	int maxBrightness;
+	bool mirrorX, mirrorY, overrideCutoff;
+	bool** pixels;
+	rgb_matrix::Canvas* _source;
+	std::vector<Panel> _panels;
+	
+	void ResetPixels();
 };
 
 #endif

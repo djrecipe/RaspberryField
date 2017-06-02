@@ -39,7 +39,7 @@
 // history count for each frequency bin (for display)
 #define BIN_DEPTH 8
 // number of "fan blades" per bin value
-#define RADIAL_FAN_COUNT 8
+#define RADIAL_FAN_COUNT 4
 // angle between each radial "fan blade" (angle = pi/value)
 #define RADIAL_FAN_SPACING 32.0
 // capture sample rate
@@ -69,7 +69,7 @@ class Spectrometer
     bool running;
     Config* config;    
     rgb_matrix::GPIO io;
-    GridTransformer grid;
+    GridTransformer* grid;
     rgb_matrix::RGBMatrix* canvas;
 	
 	DisplayMode displayMode;
@@ -77,16 +77,14 @@ class Spectrometer
 	unsigned char* logo;
     
     void GetBins(short* buffer, int* bins, bool logarithmic);
-	void GetExcludedPixels(bool** exclude);
 	int GetRandomNumber(int min, int max);
     void InitializeAudioDevice();
     void InitializeLEDMatrix(char* config_path);
     void InitializeFFT();
     void NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BIN_COUNT]);
-    void PrintBars(int bins[][BIN_COUNT], bool** pixels);
-    void PrintBitmap(int bins[][BIN_COUNT], bool** pixels, unsigned char* data);
-    void PrintBlack(bool** pixels, bool** exclude);
-	void PrintRadial(int bins[][BIN_COUNT], bool** pixels, float seconds);
+    void PrintBars(int bins[][BIN_COUNT]);
+    void PrintBitmap(int bins[][BIN_COUNT], unsigned char* data);
+	void PrintRadial(int bins[][BIN_COUNT], float seconds);
     void PrintText(int x, int y, const std::string& message, int r = 255, int g = 255, int b = 255);
 	void ReadBitmap(char* filename, unsigned char* data);
 	//void RemoveExclusions(bool** exclude);
