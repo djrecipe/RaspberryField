@@ -202,9 +202,13 @@ void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BI
 {
     // initialize parameters
     int i=0, j=0;
+    int min = 999999999, max = -999999999, bin_max = -999999999;
     // calculate highest and lowest peaks of a given frequency bin
     for(j=0; j<BIN_COUNT; j++)
     {
+        // reset current frequency bin max
+        bin_max = 0;
+        // iterate through all bin history (even not displayed ones)
         for(i=0; i<TOTAL_BIN_DEPTH; i++)
         {
             // convert to db
@@ -214,11 +218,38 @@ void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BI
             }
             // ignore negative values/db
             bins[i][j] = fmax(bins[i][j], 0);
+            // calculate max for all history of current frequency bin
+            bin_max = fmax(bin_max, bins[i][j]);
+            // calculate max for all history of all frequency bins
+            max = fmax(max, bins[i][j]);
+        }
+        // calculate smallest peak occurring to any given frequency bin over all history
+        min = fmin(min, bin_max);
+    }
+    // calculate range 
+    int range = max-min;
+    float ratio = 0.5;
+    // normalize displayed bins only
+    for(i=0; i<BIN_DEPTH; i++)
+    {
+        for(j=0; j<BIN_COUNT; j++)
+        {
+            // autoscale
+            if(options &~ Autoscale)
+            {
+                // calculate ratio (0.0 -> 1.0)
+                ratio = (float)(bins[i][j] - min)/(float)range;
+                // cull negative values (i.e. amplitudes which are underrange)
+                ratio = fmax(ratio, 0.0);
+                //fprintf(stderr, "%f\n", ratio);
+                bins[i][j] = FULL_SCALE*ratio;
+            }
             // apply sigmoid approximation (emphasize peaks and scale 0.0-100.0)
             if(options &~ Sigmoid)
             {               
                 bins[i][j] = this->Sigmoid((double)bins[i][j]);
             }
+            // store normalized bins
             normalized_bins[i][j] = bins[i][j];
         }
     }

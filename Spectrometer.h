@@ -54,13 +54,13 @@
 // sigmoid sloep (higher = slopes slower, less effect of attenuation/gain)
 // with logarithmic also enabled, increasing this number will result in a sharper corner and a closer resemblance to the 20log10 function
 // *** this parameter is of great interest
-#define SIGMOID_SLOPE 3.0
+#define SIGMOID_SLOPE 2.0
 
 
 class Spectrometer
 {
 	enum DisplayMode { Bars=0, Bitmap=1, Radial=2 };
-    enum FFTOptions { None = 0, Logarithmic = 1, Sigmoid = 2};
+    enum FFTOptions { None = 0, Logarithmic = 1, Sigmoid = 2, Autoscale = 4};
     
     inline FFTOptions operator|(FFTOptions a, FFTOptions b){return static_cast<FFTOptions>(static_cast<int>(a)|static_cast<int>(b));}
 	
