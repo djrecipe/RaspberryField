@@ -500,7 +500,7 @@ void Spectrometer::Start()
         if((int)seconds%60<=20 && this->displayMode != Bitmap)
         {
 			this->displayMode = Bitmap;
-			this->grid->SetCutoff(100);
+			this->grid->SetCutoff(80);
         }
 		else if((int)seconds%60>20 && (int)seconds%60<=40 && this->displayMode != Radial)
 		{
