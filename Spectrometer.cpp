@@ -202,13 +202,9 @@ void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BI
 {
     // initialize parameters
     int i=0, j=0;
-    int min = 999999999, max = -999999999, bin_max = -999999999;
-    float component1 = 0.0, component2 = 0.0;
     // calculate highest and lowest peaks of a given frequency bin
     for(j=0; j<BIN_COUNT; j++)
     {
-        // reset current frequency bin max
-		bin_max = 0;
         for(i=0; i<TOTAL_BIN_DEPTH; i++)
         {
             // convert to db
@@ -218,41 +214,12 @@ void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BI
             }
             // ignore negative values/db
             bins[i][j] = fmax(bins[i][j], 0);
-            // apply sigmoid approximation (significant attenutation to x < 50db; moderate gain to 50db < x < 100db; slight attenutation to x > 100db)
+            // apply sigmoid approximation (emphasize peaks and scale 0.0-100.0)
             if(options &~ Sigmoid)
             {               
-                component1 = fmin(pow((float)(bins[i][j]+5.0)/15.0, 3.0), 50.0);
-                component2 = 7.0*sqrt(fmax(bins[i][j]-50.0, 0.0));
-                bins[i][j] = component1 + component2;
+                bins[i][j] = this->Sigmoid((double)bins[i][j]);
             }
-            // calculate max for all history of current frequency bin
-			bin_max = fmax(bin_max, bins[i][j]);
-            // calculate max for all history of all frequency bins
-			max = fmax(max, bins[i][j]);
-        }
-        // calculate smallest peak occurring to any given frequency bin over all history
-        min = fmin(min, bin_max);
-    }
-    // calculate range 
-    int range = max-min;
-    float nominal_max = 100.0, ratio = 0.5;
-    for(i=0; i<TOTAL_BIN_DEPTH; i++)
-    {
-        for(j=0; j<BIN_COUNT; j++)
-        {
-            if(options &~ Autoscale)
-            {
-                // calculate ratio (0.0 -> 1.0)
-                ratio = (float)(bins[i][j] - min)/(float)range;
-                // cull negative values (amplitudes which are underrange)
-                ratio = fmax(ratio, 0.0);
-                //fprintf(stderr, "%f\n", ratio);
-                normalized_bins[i][j] = nominal_max*ratio;
-            }
-            else
-            {
-                normalized_bins[i][j] = bins[i][j];
-            }
+            normalized_bins[i][j] = bins[i][j];
         }
     }
     return;
@@ -271,7 +238,7 @@ void Spectrometer::PrintBars(int bins[][BIN_COUNT])
         for(j=0; j<BIN_COUNT; j++)
         {
             // calculate amplitude
-            ratio = (float)bins[i][j] / 100.0;
+            ratio = (float)bins[i][j] / FULL_SCALE;
             bar_height = (int)(ratio * (float)this->panelHeight);
             // iterate across
             for(x=0; x<col_width; x++)
@@ -314,7 +281,7 @@ void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], unsigned char * data)
         for(j=0; j<BIN_COUNT; j++)
         {
             // calculate base gain (based on bin amplitude) (0.0 -> 2.0)
-            bin_gain = (float)bins[i][j] / 50.0;
+            bin_gain = (float)bins[i][j] / (FULL_SCALE/2.0);
             // increases with bin frequency (0.1 -> 1.0)
             blue_gain = fmax(bin_gain * ((float)(j+1)/(float)BIN_COUNT)*decay, blue_gain);
             // increases towards center frequency (0.1 -> 1.0 -> 0.1)
@@ -399,7 +366,7 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], float seconds)
             // blue gain ([low frequency] 2.0 -> 0.0 [high frequency])
             blue_gain = (1.0 - freq_ratio)*2.0; 
             // amplitude ratio ([low amplitude] 0.0 -> 1.0 [high amplitude])
-            amplitude_ratio = (float)(bins[i][j]) / 100.0;
+            amplitude_ratio = (float)(bins[i][j]) / FULL_SCALE;
 			//fprintf(stderr,"%f\n",amplitude_ratio);
 			// angle ([low frequency] 0 rad -> 2pi rad [high frequency])
             base_angle = freq_ratio * M_PI * 2.0 +angle_offset;
@@ -416,12 +383,13 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], float seconds)
 				x_vector = (int)((float)base_vector * sin(angle)*amplitude_ratio);
 				y_vector = (int)((float)base_vector * cos(angle)*amplitude_ratio);
 				float factor = 0.01;
-				for(m=0; m<100; m++)
+                // draw a "ray" from center point outwards
+				for(m=0; m<20; m++)
 				{
 					// start in middle, add x and y vectors
 					x = (int)((float)this->panelWidth/2.0 + (float)x_vector*factor);
 					y = (int)((float)this->panelHeight/2.0 + (float)y_vector*factor);
-					factor += 0.01;
+					factor += 0.05;
 					this->canvas->SetPixel(x, y, r, g, b);
 				}
 			}
@@ -467,6 +435,15 @@ void Spectrometer::ReadBitmap(char* filename, unsigned char* data)
     fclose(f);
     fprintf(stderr, "Successfully read bitmap\n");
     return;  
+}
+double Spectrometer::Sigmoid(double value)
+{
+    /*
+        through testing I have found that in order to approach a desired full scale value, the left-hand side constant (in the demoninator)
+        needs to be equal to the numerator divided by the desired full scale
+    */
+    double constant = SIGMOID_NUMERATOR/FULL_SCALE; 
+    return SIGMOID_NUMERATOR/(constant+pow(M_E,-1.0*((value-SIGMOID_OFFSET)/SIGMOID_SLOPE)))
 }
 void Spectrometer::Start()
 {    
@@ -532,7 +509,7 @@ void Spectrometer::Start()
         }
         
         // normalize bins (based on history)
-        this->NormalizeBins(bins, normalized_bins, Logarithmic|Sigmoid|Autoscale);
+        this->NormalizeBins(bins, normalized_bins, Logarithmic|Sigmoid);
     
         // display
 		switch(this->displayMode)

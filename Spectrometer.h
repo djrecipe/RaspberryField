@@ -32,6 +32,7 @@
 #define FFT_LOOPS 1
 // determines fft length & buffer size
 #define FFT_LOG 9
+#define FULL_SCALE 100.0
 // # of frequency bins
 #define BIN_COUNT 16
 // history count for each frequency bin (for normalization)
@@ -44,12 +45,22 @@
 #define RADIAL_FAN_SPACING 32.0
 // capture sample rate
 #define SAMP_RATE 11025
+// sigmoid numerator value
+// with logarithmic also enabled, decreasing this value allows you to stretch the sigmoid shape along the x-axis
+#define SIGMOID_NUMERATOR 10.0
+// sigmoid X offset (higher = more low frequency attenuation, more amplitude required to hit gain threshold)
+// with logarithmic also enabled, increasing this number will exponentially increase the amount of amplitude required to hit full scale db
+#define SIGMOID_OFFSET 50.0
+// sigmoid sloep (higher = slopes slower, less effect of attenuation/gain)
+// with logarithmic also enabled, increasing this number will result in a sharper corner and a closer resemblance to the 20log10 function
+// *** this parameter is of great interest
+#define SIGMOID_SLOPE 3.0
 
 
 class Spectrometer
 {
 	enum DisplayMode { Bars=0, Bitmap=1, Radial=2 };
-    enum FFTOptions { None = 0, Logarithmic = 1, Sigmoid = 2, Autoscale = 3};
+    enum FFTOptions { None = 0, Logarithmic = 1, Sigmoid = 2};
     
     inline FFTOptions operator|(FFTOptions a, FFTOptions b){return static_cast<FFTOptions>(static_cast<int>(a)|static_cast<int>(b));}
 	
@@ -90,7 +101,7 @@ class Spectrometer
 	void PrintRadial(int bins[][BIN_COUNT], float seconds);
     void PrintText(int x, int y, const std::string& message, int r = 255, int g = 255, int b = 255);
 	void ReadBitmap(char* filename, unsigned char* data);
-	//void RemoveExclusions(bool** exclude);
+    double Sigmoid(double value);
       
 };
 
