@@ -279,52 +279,52 @@ void Spectrometer::PrintBitmap(int bins[][BIN_COUNT], unsigned char * data)
 {
     // initialize parameters
     int x = 0, y = 0, r = 0, g = 0, b = 0, i = 0, j=0;
-    float decay = 0.0, bin_gain = 1.0, red_gain = 1.0, green_gain = 1.0, blue_gain = 1.0;
-    // draw
-    // calculate gain (based on amplitude)
+    float decay = 0.0, bin_gain = 0.0, red_gain = 0.0, green_gain = 0.0, blue_gain = 0.0;
+    // calculate color gains based on audio frequency content
+    // iterate through bins, depthwise
+    for(i=0; i<BIN_DEPTH; i++)
+    {
+        // calculate decay (based on age)
+        decay = (float)(BIN_DEPTH - i)/(float)BIN_DEPTH;
+        // iterate through all frequency bins (of a given depth)
+        for(j=0; j<BIN_COUNT; j++)
+        {
+            // calculate base gain (based on bin amplitude) (0.0 -> 2.0)
+            bin_gain = (float)bins[i][j] / 50.0;
+            // (increases with bin frequency)
+            blue_gain = fmax(bin_gain * ((float)(j+1)/(float)BIN_COUNT)*decay, blue_gain);
+            // (increases towards center frequency)
+            green_gain = fmax(bin_gain * ((float)(BIN_COUNT/2-abs(j-BIN_COUNT/2))/(float)(BIN_COUNT/2))*decay, green_gain);
+            // (decreases with bin frequency)
+            red_gain = fmax(bin_gain * ((float)(BIN_COUNT - j)/(float)BIN_COUNT)*decay, red_gain); 
+        }
+    }  
+    // gains will be 0.0 -> 2.0, square them to exaggerate peaks and attenuate valleys
+    red_gain = pow(red_gain, 2.0);
+    green_gain = pow(green_gain, 2.0);
+    blue_gain = pow(blue_gain, 2.0);
+    // iterate through each pixel in the bitmap
     for(x =0; x<this->panelWidth; x++)
     {
-        // iterate upwards
         for(y=0; y<this->panelHeight; y++)
         {
             // check if pixel is already occupied
             if(this->grid->GetPixelState(x,y))
 				continue;
+			// calculate index into single dimensional array of pixel data
 			int index = y * this->panelWidth * 3 + x*3;
+            // check for black pixel (reduce calculation time)
 			if(((int)data[index] < 1) && ((int)data[index+1] < 1) && ((int)data[index+2] < 1))
 			{
 				this->grid->SetPixel(x, y, 0, 0, 0);
 				continue;
 			}
-            // iterate through bin depthwise
-            for(i=0; i<BIN_DEPTH; i++)
-            {
-				if(this->grid->GetPixelState(x, y))
-					break;
-                // calculate decay (based on age)
-                decay = (float)(BIN_DEPTH - i)/(float)BIN_DEPTH;
-                // iterate through bins and calculate gains
-				red_gain = 0.0;
-				blue_gain = 0.0;
-				green_gain = 0.0;
-                for(j=0; j<BIN_COUNT; j++)
-                {
-                    // calculate base gain (based on bin amplitude)
-                    bin_gain = (float)bins[i][j] / 50.0;
-                    // (increases with bin frequency)
-                    blue_gain = fmax(bin_gain * ((float)(j+1)/(float)BIN_COUNT)*decay, blue_gain);
-                    // (increases towards center frequency)
-                    green_gain = fmax(bin_gain * ((float)(BIN_COUNT/2-abs(j-BIN_COUNT/2))/(float)(BIN_COUNT/2))*decay, green_gain);
-                    // (decreases with bin frequency)
-                    red_gain = fmax(bin_gain * ((float)(BIN_COUNT - j)/(float)BIN_COUNT)*decay, red_gain); 
-					// calculate data index
-					// calculate color
-                }
-				r = (float)data[index]*pow(red_gain, 2.0);
-				g = (float)data[index+1]*pow(green_gain, 2.0);
-				b = (float)data[index+2]*pow(blue_gain, 2.0);
-				this->grid->SetPixel(x, y, r, g, b);
-            }  
+            // calculate color
+            r = (float)data[index]*red_gain;
+            g = (float)data[index+1]*green_gain;
+            b = (float)data[index+2]*blue_gain;
+            // draw
+            this->grid->SetPixel(x, y, r, g, b);
         }
     }
     return;
@@ -529,7 +529,6 @@ void Spectrometer::Start()
 				break;
 		}
         this->grid->FillRemaining(0,0,0);
-		//this->RemoveExclusions(exclude);
         // sleep
         usleep(1000);
     }
