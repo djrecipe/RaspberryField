@@ -32,6 +32,11 @@ void Spectrometer::GetBins(short* buffer, int* bins)
         fft->in[i].re = (float)buffer[i];
         fft->in[i].im =  0.0;
     }
+	// reset maxs
+	for (j=0; j<BIN_COUNT; j++)
+	{
+		maxs[j] = 0.0;
+	}
     
     // execute fft
     gpu_fft_execute(this->fft); // call one or many times
@@ -50,6 +55,7 @@ void Spectrometer::GetBins(short* buffer, int* bins)
                 // calculate result vector
 				value = sqrt(pow(this->fft->out[i].re, 2) + pow(this->fft->out[i].re, 2)); 
 				maxs[j] = fmax(maxs[j], value);
+				bins[j] = (int)maxs[j];
                 break;
             }
         }
@@ -183,7 +189,7 @@ void Spectrometer::InitializeLEDMatrix(char* config_path)
     this->canvas = new RGBMatrix(&io, height, chain_length, parallel_count); 
     this->grid = this->config->getGridTransformer();
 	// set cutoff (at least one color value must be greater than this value in order for the pixel to be displayed)
-    fprintf(stderr, "\tCutoff: %d\n", 80);
+    fprintf(stderr, "\tCutoff: %d\n", 0);
 	this->grid->SetCutoff(0);
     // set max pixel value (aka 'brightness')
     fprintf(stderr, "\tBrightness: %d\n", 225);
@@ -212,16 +218,16 @@ void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BI
         for(i=0; i<TOTAL_BIN_DEPTH; i++)
         {
             // convert to db
-            if(options &~ Logarithmic)
+            if((options & Logarithmic) != 0)
             {
-                bins[i][j] = 20.0 * log10(bins[i][j]);
+                normalized_bins[i][j] = 20.0 * log10(bins[i][j]);
             }
             // ignore negative values/db
-            bins[i][j] = fmax(bins[i][j], 0);
+            normalized_bins[i][j] = fmax(normalized_bins[i][j], 0);
             // calculate max for all history of current frequency bin
-            bin_max = fmax(bin_max, bins[i][j]);
+            bin_max = fmax(bin_max, normalized_bins[i][j]);
             // calculate max for all history of all frequency bins
-            max = fmax(max, bins[i][j]);
+            max = fmax(max, normalized_bins[i][j]);
         }
         // calculate smallest peak occurring to any given frequency bin over all history
         min = fmin(min, bin_max);
@@ -235,22 +241,20 @@ void Spectrometer::NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BI
         for(j=0; j<BIN_COUNT; j++)
         {
             // autoscale
-            if(options &~ Autoscale)
+            if((options & Autoscale) != 0)
             {
                 // calculate ratio (0.0 -> 1.0)
-                ratio = (float)(bins[i][j] - min)/(float)range;
+                ratio = (float)(normalized_bins[i][j] - min)/(float)range;
                 // cull negative values (i.e. amplitudes which are underrange)
                 ratio = fmax(ratio, 0.0);
                 //fprintf(stderr, "%f\n", ratio);
-                bins[i][j] = FULL_SCALE*ratio;
+                normalized_bins[i][j] = FULL_SCALE*ratio;
             }
             // apply sigmoid approximation (emphasize peaks and scale 0.0-100.0)
-            if(options &~ Sigmoid)
+            if((options & Sigmoid) != 0)
             {               
-                bins[i][j] = this->Sigmoid((double)bins[i][j]);
+                normalized_bins[i][j] = this->SigmoidFunction((double)normalized_bins[i][j]);
             }
-            // store normalized bins
-            normalized_bins[i][j] = bins[i][j];
         }
     }
     return;
@@ -270,7 +274,7 @@ void Spectrometer::PrintBars(int bins[][BIN_COUNT])
         {
             // calculate amplitude
             ratio = (float)bins[i][j] / FULL_SCALE;
-            bar_height = (int)(ratio * (float)this->panelHeight);
+            bar_height = (int)fmax(ratio * (float)this->panelHeight, 0.0);
             // iterate across
             for(x=0; x<col_width; x++)
             {
@@ -375,7 +379,7 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], float seconds)
 {
 	// intialize parameters
     int i=0,j=0,k=0,m=0,r=0,g=0,b=0,x=0,y=0,x_vector=0,y_vector=0;
-	int base_vector = (this->panelWidth/2 + this->panelHeight/2)/2;
+	int base_vector = fmax(this->panelWidth/2,this->panelHeight/2);
     float freq_ratio=0.0,amplitude_ratio=0.0,decay=0.0,base_angle=0.0,angle=0.0,red_gain=1.0,blue_gain=1.0,green_gain=1.0;
     float angle_offset = (M_PI * 2.0)*(seconds/5.0);
     this->canvas->SetPixel(31, 15, 0, 0, 0);
@@ -413,15 +417,16 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], float seconds)
 				// calculate output coordinates (center point + vectors)
 				x_vector = (int)((float)base_vector * sin(angle)*amplitude_ratio);
 				y_vector = (int)((float)base_vector * cos(angle)*amplitude_ratio);
-				float factor = 0.01;
+				float factor = 1.0, color_factor = 1.0;;
                 // draw a "ray" from center point outwards
-				for(m=0; m<20; m++)
+				for(m=50; m>0; m--)
 				{
 					// start in middle, add x and y vectors
 					x = (int)((float)this->panelWidth/2.0 + (float)x_vector*factor);
 					y = (int)((float)this->panelHeight/2.0 + (float)y_vector*factor);
-					factor += 0.05;
-					this->canvas->SetPixel(x, y, r, g, b);
+					factor -= 0.02;
+					color_factor = sqrt(factor);
+					this->canvas->SetPixel(x, y, r*color_factor, g*color_factor, b*color_factor);
 				}
 			}
         }
@@ -467,14 +472,14 @@ void Spectrometer::ReadBitmap(char* filename, unsigned char* data)
     fprintf(stderr, "Successfully read bitmap\n");
     return;  
 }
-double Spectrometer::Sigmoid(double value)
+double Spectrometer::SigmoidFunction(double value)
 {
     /*
         through testing I have found that in order to approach a desired full scale value, the left-hand side constant (in the demoninator)
         needs to be equal to the numerator divided by the desired full scale
     */
     double constant = SIGMOID_NUMERATOR/FULL_SCALE; 
-    return SIGMOID_NUMERATOR/(constant+pow(M_E,-1.0*((value-SIGMOID_OFFSET)/SIGMOID_SLOPE)))
+    return SIGMOID_NUMERATOR/(constant+pow(M_E,-1.0*((value-SIGMOID_OFFSET)/SIGMOID_SLOPE)));
 }
 void Spectrometer::Start()
 {    
@@ -526,7 +531,7 @@ void Spectrometer::Start()
         if((int)seconds%60<=20 && this->displayMode != Bitmap)
         {
 			this->displayMode = Bitmap;
-			this->grid->SetCutoff(80);
+			this->grid->SetCutoff(50);
         }
 		else if((int)seconds%60>20 && (int)seconds%60<=40 && this->displayMode != Radial)
 		{
@@ -540,18 +545,24 @@ void Spectrometer::Start()
         }
         
         // normalize bins (based on history)
-        this->NormalizeBins(bins, normalized_bins, Logarithmic|Sigmoid);
+		FFTOptions options = None;
     
         // display
 		switch(this->displayMode)
 		{
 			case Bars:
+				options = Logarithmic|Autoscale|Sigmoid;
+				this->NormalizeBins(bins, normalized_bins, options);
 				this->PrintBars(normalized_bins);
 				break;
 			case Bitmap:
+				options = Logarithmic|Autoscale|Sigmoid;
+				this->NormalizeBins(bins, normalized_bins, options);
 				this->PrintBitmap(normalized_bins, this->logo);
 				break;
 			case Radial:
+				options = Logarithmic|Autoscale;
+				this->NormalizeBins(bins, normalized_bins, options);
 				this->PrintRadial(normalized_bins, seconds);
 				break;
 			default:

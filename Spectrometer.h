@@ -50,19 +50,19 @@
 #define SIGMOID_NUMERATOR 10.0
 // sigmoid X offset (higher = more low frequency attenuation, more amplitude required to hit gain threshold)
 // with logarithmic also enabled, increasing this number will exponentially increase the amount of amplitude required to hit full scale db
-#define SIGMOID_OFFSET 50.0
+#define SIGMOID_OFFSET 25.0
 // sigmoid sloep (higher = slopes slower, less effect of attenuation/gain)
 // with logarithmic also enabled, increasing this number will result in a sharper corner and a closer resemblance to the 20log10 function
 // *** this parameter is of great interest
-#define SIGMOID_SLOPE 2.0
+#define SIGMOID_SLOPE 12.0
 
+enum FFTOptions { None = 0, Logarithmic = 1, Sigmoid = 2, Autoscale = 4};
+
+inline FFTOptions operator|(FFTOptions a, FFTOptions b){return static_cast<FFTOptions>(static_cast<int>(a)|static_cast<int>(b));}
 
 class Spectrometer
 {
 	enum DisplayMode { Bars=0, Bitmap=1, Radial=2 };
-    enum FFTOptions { None = 0, Logarithmic = 1, Sigmoid = 2, Autoscale = 4};
-    
-    inline FFTOptions operator|(FFTOptions a, FFTOptions b){return static_cast<FFTOptions>(static_cast<int>(a)|static_cast<int>(b));}
 	
     public:
     Spectrometer(char* config_path);
@@ -101,7 +101,7 @@ class Spectrometer
 	void PrintRadial(int bins[][BIN_COUNT], float seconds);
     void PrintText(int x, int y, const std::string& message, int r = 255, int g = 255, int b = 255);
 	void ReadBitmap(char* filename, unsigned char* data);
-    double Sigmoid(double value);
+    double SigmoidFunction(double value);
       
 };
 
