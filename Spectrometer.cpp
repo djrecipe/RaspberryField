@@ -12,8 +12,13 @@ Spectrometer::Spectrometer(char* config_path)
     this->InitializeAudioDevice();
     this->InitializeFFT();
     this->InitializeLEDMatrix(config_path);   
-    this->logo = new unsigned char[this->panelWidth * this->panelHeight * 3];
-    this->ReadBitmap("chilluminati-logo.bmp", this->logo);
+	// TODO 08/12/17: make this an array
+	for(int i=0; i<this->config->getImageCount(); i++)
+	{
+		this->logos.push_back(new unsigned char[this->panelWidth * this->panelHeight * 3]);
+		const char * path = this->config->getImage(i).c_str();
+		this->ReadBitmap(path, this->logos[i]);
+	}
     return;
 }
 
@@ -61,6 +66,24 @@ void Spectrometer::GetBins(short* buffer, int* bins)
         }
     }
     return;
+}
+
+unsigned int Spectrometer::GetBitmapIndex(float seconds)
+{
+	int weight = (int)(100.0*this->animationDuration);
+	int value = (int)(seconds*100.0)%weight;
+	int image_count = this->config->getImageCount(); 
+	int loop_image_count = 1;
+	if(image_count > 1)
+		loop_image_count = ((image_count-2)*2)+2;
+	int divisor = weight/loop_image_count;
+	int index = value/divisor;
+	if(index >= image_count)
+	{
+		index = image_count - 2 - (index - image_count);
+	}
+	index = (int)fmin(index, image_count-1);
+	return index;
 }
 
 int Spectrometer::GetRandomNumber(int min, int max)
@@ -180,6 +203,9 @@ void Spectrometer::InitializeLEDMatrix(char* config_path)
     this->panelHeight = height;
     fprintf(stderr, "\tSize: %d x %d\n", this->panelWidth, this->panelHeight);
     
+	// bitmap stuff
+	this->animationDuration = this->config->getAnimationDuration();
+	
     // Initialize GPIO
     if (!this->io.Init())
     {
@@ -189,11 +215,13 @@ void Spectrometer::InitializeLEDMatrix(char* config_path)
     this->canvas = new RGBMatrix(&io, height, chain_length, parallel_count); 
     this->grid = this->config->getGridTransformer();
 	// set cutoff (at least one color value must be greater than this value in order for the pixel to be displayed)
-    fprintf(stderr, "\tCutoff: %d\n", 0);
-	this->grid->SetCutoff(0);
+	int cutoff = this->config->getLEDCutoff();
+    fprintf(stderr, "\tCutoff: %d\n", cutoff);
+	this->grid->SetCutoff(cutoff);
     // set max pixel value (aka 'brightness')
-    fprintf(stderr, "\tBrightness: %d\n", 225);
-    this->grid->SetMaxBrightness(225);
+	int max_brightness = this->config->getLEDMaxBrightness();
+    fprintf(stderr, "\tBrightness: %d\n", max_brightness);
+    this->grid->SetMaxBrightness(max_brightness);
     // turn on horizontal mirroring (due to incorrect wiring)
     this->grid->SetMirrorX(true);
     // set grid transformer (for virtual calls)
@@ -433,7 +461,7 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], float seconds)
     }
 	return;
 }
-void Spectrometer::ReadBitmap(char* filename, unsigned char* data)
+void Spectrometer::ReadBitmap(const char* filename, unsigned char* data)
 {
     fprintf(stderr, "Reading bitmap (%s)\n", filename);
     
@@ -527,7 +555,8 @@ void Spectrometer::Start()
         
 
         seconds = (float)( clock () - begin_time ) / (float)CLOCKS_PER_SEC;
-		
+		FFTOptions options = None;
+		/*
         if((int)seconds%60<=20 && this->displayMode != Bitmap)
         {
 			this->displayMode = Bitmap;
@@ -543,10 +572,7 @@ void Spectrometer::Start()
 			this->displayMode = Bars;
 			this->grid->SetCutoff(0);
         }
-        
-        // normalize bins (based on history)
-		FFTOptions options = None;
-    
+
         // display
 		switch(this->displayMode)
 		{
@@ -567,7 +593,13 @@ void Spectrometer::Start()
 				break;
 			default:
 				break;
-		}
+		}*/
+		
+		
+	    options = Logarithmic|Autoscale|Sigmoid;
+	    this->NormalizeBins(bins, normalized_bins, options);
+		unsigned int bitmap_index = this->GetBitmapIndex(seconds);
+	    this->PrintBitmap(normalized_bins, this->logos[bitmap_index]);
         this->grid->FillRemaining(0,0,0);
         // sleep
         usleep(1000);
@@ -597,8 +629,12 @@ Spectrometer::~Spectrometer()
     // release FFT
     fprintf(stderr, "\tReleasing fft data\n");
     gpu_fft_release(this->fft);
-    fprintf(stderr, "\tDeleting logo pointer\n");
-    delete this->logo;
+    fprintf(stderr, "\tDeleting logo pointers\n");
+	for(int i=0; i<this->logos.size(); i++)
+	{
+		delete this->logos[i];
+	}
+	//delete this->logos;
 	fprintf(stderr, "\tDeleting grid pointer\n");
 	delete this->grid;
     fprintf(stderr, "\tDeleting canvas pointer\n");

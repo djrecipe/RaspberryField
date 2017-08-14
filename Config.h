@@ -13,11 +13,21 @@ public:
   Config(const std::string& filename);
 
   // Attribute accessors:
+  float getAnimationDuration() const {
+	return _animation_duration;
+  }
+  
   int getDisplayWidth() const {
     return _display_width;
   }
   int getDisplayHeight() const {
     return _display_height;
+  }
+  int getLEDCutoff() const {
+	return _led_cutoff;
+  }
+  int getLEDMaxBrightness() const {
+	return _led_max_brightness;
   }
   int getPanelWidth() const {
     return _panel_width;
@@ -27,6 +37,13 @@ public:
   }
   int getChainLength() const {
     return _chain_length;
+  }
+  std::string getImage(int index)
+  {
+	  return _images[index];
+  }
+  int getImageCount() const {
+	return _image_count;
   }
   int getParallelCount() const {
     return _parallel_count;
@@ -51,10 +68,15 @@ private:
       _panel_width,
       _panel_height,
       _chain_length,
+	  _image_count,
       _parallel_count,
       _crop_x,
       _crop_y;
+  int _led_cutoff,
+	  _led_max_brightness;
+  float _animation_duration;
   std::vector<GridTransformer::Panel> _panels;
+  std::vector<std::string> _images;
 };
 
 #endif

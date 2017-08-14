@@ -64,17 +64,21 @@ class Spectrometer
 {
 	enum DisplayMode { Bars=0, Bitmap=1, Radial=2 };
 	
+	
     public:
     Spectrometer(char* config_path);
     ~Spectrometer();
     
     void Start();
     void Stop();
+	
+	
     private:
     
     int panelWidth = 0;
     int panelHeight = 0;
 	float seconds = 0.0;
+	float animationDuration = 1.0;
     int mailbox;
     struct GPU_FFT *fft;
     
@@ -88,9 +92,10 @@ class Spectrometer
 	
 	DisplayMode displayMode;
 	
-	unsigned char* logo;
+	std::vector<unsigned char*> logos;
     
     void GetBins(short* buffer, int* bins);
+    unsigned int GetBitmapIndex(float seconds);
 	int GetRandomNumber(int min, int max);
     void InitializeAudioDevice();
     void InitializeLEDMatrix(char* config_path);
@@ -100,7 +105,7 @@ class Spectrometer
     void PrintBitmap(int bins[][BIN_COUNT], unsigned char* data);
 	void PrintRadial(int bins[][BIN_COUNT], float seconds);
     void PrintText(int x, int y, const std::string& message, int r = 255, int g = 255, int b = 255);
-	void ReadBitmap(char* filename, unsigned char* data);
+	void ReadBitmap(const char* filename, unsigned char* data);
     double SigmoidFunction(double value);
       
 };

@@ -1,6 +1,8 @@
 // Matrix configuration parsing class implementation.
 // Author: Tony DiCola
 #include <sstream>
+#include <stdio.h>
+#include <string.h>
 #include <stdexcept>
 #include <vector>
 #include <iostream>
@@ -25,6 +27,9 @@ Config::Config(const string& filename) {
     _panel_height = root["panel_height"];
     _chain_length = root["chain_length"];
     _parallel_count = root["parallel_count"];
+	// led config
+	_led_cutoff = root["led_cutoff"];
+	_led_max_brightness = root["led_max_brightness"];
     // Set default value for optional config values.
     _crop_x = -1;
     _crop_y = -1;
@@ -92,6 +97,21 @@ Config::Config(const string& filename) {
       error << "Expected " << expected << " panels in configuration but found " << _panels.size() << "!";
       throw invalid_argument(error.str());
     }
+	// Parse image info
+	_animation_duration = root["animation_duration"];
+	// TODO 08/13/17: fix this so we don't have to iterate through a 1 size array
+	libconfig::Setting& images_config = root["images"];
+    for (int i = 0; i < 1; ++i)
+	{
+		libconfig::Setting& row = images_config[i];
+	    _image_count = row.getLength();
+		for (int j = 0; j < _image_count; ++j)
+		{
+			const char * c_path = row[j]["value"];
+			std::string path(c_path);
+			_images.push_back(path);
+		}
+	}
   }
   catch (const libconfig::FileIOException& fioex)
   {
