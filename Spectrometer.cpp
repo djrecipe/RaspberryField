@@ -560,19 +560,17 @@ void Spectrometer::Start()
         if((int)seconds%60<=20 && this->displayMode != Bitmap)
         {
 			this->displayMode = Bitmap;
-			this->grid->SetCutoff(50);
         }
 		else if((int)seconds%60>20 && (int)seconds%60<=40 && this->displayMode != Radial)
 		{
 			this->displayMode = Radial;
-			this->grid->SetCutoff(0);
 		}
         else if((int)seconds%60>40 && this->displayMode != Bars)
         {  
 			this->displayMode = Bars;
-			this->grid->SetCutoff(0);
-        }
+        }*/
 
+	    this->displayMode = Bitmap;
         // display
 		switch(this->displayMode)
 		{
@@ -584,7 +582,8 @@ void Spectrometer::Start()
 			case Bitmap:
 				options = Logarithmic|Autoscale|Sigmoid;
 				this->NormalizeBins(bins, normalized_bins, options);
-				this->PrintBitmap(normalized_bins, this->logo);
+				unsigned int bitmap_index = this->GetBitmapIndex(seconds);
+				this->PrintBitmap(normalized_bins, this->logos[bitmap_index]);
 				break;
 			case Radial:
 				options = Logarithmic|Autoscale;
@@ -593,13 +592,9 @@ void Spectrometer::Start()
 				break;
 			default:
 				break;
-		}*/
+		}
 		
 		
-	    options = Logarithmic|Autoscale|Sigmoid;
-	    this->NormalizeBins(bins, normalized_bins, options);
-		unsigned int bitmap_index = this->GetBitmapIndex(seconds);
-	    this->PrintBitmap(normalized_bins, this->logos[bitmap_index]);
         this->grid->FillRemaining(0,0,0);
         // sleep
         usleep(1000);
