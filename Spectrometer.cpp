@@ -582,8 +582,7 @@ void Spectrometer::Start()
 			case Bitmap:
 				options = Logarithmic|Autoscale|Sigmoid;
 				this->NormalizeBins(bins, normalized_bins, options);
-				unsigned int bitmap_index = this->GetBitmapIndex(seconds);
-				this->PrintBitmap(normalized_bins, this->logos[bitmap_index]);
+				this->PrintBitmap(normalized_bins, this->logos[this->GetBitmapIndex(seconds)]);
 				break;
 			case Radial:
 				options = Logarithmic|Autoscale;
