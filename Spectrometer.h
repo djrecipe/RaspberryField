@@ -75,6 +75,7 @@ class Spectrometer
 	
     private:
     
+	int imageSetIndex = 0;
     int panelWidth = 0;
     int panelHeight = 0;
 	float seconds = 0.0;

@@ -122,7 +122,7 @@ void GridTransformer::SetPixel(int x, int y, uint8_t red, uint8_t green, uint8_t
 	{  
 		return;
 	}
-	// check if pixel exceeds cutoff
+	// check if pixel exceeds cutoff (minimum) check
 	if(!this->overrideCutoff && red < this->cutoff && green < this->cutoff && blue < this->cutoff)
 	{
 		return;
