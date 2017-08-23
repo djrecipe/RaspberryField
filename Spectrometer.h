@@ -99,6 +99,7 @@ class Spectrometer
     unsigned int GetBitmapIndex(float seconds);
 	int GetRandomNumber(int min, int max);
     void InitializeAudioDevice();
+    void InitializeBitmaps();
     void InitializeLEDMatrix(char* config_path);
     void InitializeFFT();
     void NormalizeBins(int bins[][BIN_COUNT], int normalized_bins[][BIN_COUNT], FFTOptions options);
