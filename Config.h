@@ -38,12 +38,15 @@ public:
   int getChainLength() const {
     return _chain_length;
   }
-  std::string getImage(int index)
+  std::string getImage(int set_index, int image_index)
   {
-	  return _images[index];
+	  return _image_sets[set_index][image_index];
   }
-  int getImageCount() const {
-	return _image_count;
+  int getImageCount(int index) const {
+	return _image_sets[index].size();
+  }
+  int getImageSetCount() const {
+	return _image_sets.size();
   }
   int getParallelCount() const {
     return _parallel_count;
@@ -68,7 +71,6 @@ private:
       _panel_width,
       _panel_height,
       _chain_length,
-	  _image_count,
       _parallel_count,
       _crop_x,
       _crop_y;
@@ -76,7 +78,7 @@ private:
 	  _led_max_brightness;
   float _animation_duration;
   std::vector<GridTransformer::Panel> _panels;
-  std::vector<std::string> _images;
+  std::vector<std::vector<std::string>> _image_sets;
 };
 
 #endif

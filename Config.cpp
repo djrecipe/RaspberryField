@@ -99,18 +99,18 @@ Config::Config(const string& filename) {
     }
 	// Parse image info
 	_animation_duration = root["animation_duration"];
-	// TODO 08/13/17: fix this so we don't have to iterate through a 1 size array
 	libconfig::Setting& images_config = root["images"];
-    for (int i = 0; i < 1; ++i)
+    for (int i = 0; i < images_config.getLength(); ++i)
 	{
 		libconfig::Setting& row = images_config[i];
-	    _image_count = row.getLength();
-		for (int j = 0; j < _image_count; ++j)
+		std::vector<std::string> images; 
+		for (int j = 0; j < row.getLength(); ++j)
 		{
 			const char * c_path = row[j]["value"];
 			std::string path(c_path);
-			_images.push_back(path);
+			images.push_back(path);
 		}
+		_image_sets.push_back(images);
 	}
   }
   catch (const libconfig::FileIOException& fioex)

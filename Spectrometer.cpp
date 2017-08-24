@@ -12,13 +12,7 @@ Spectrometer::Spectrometer(char* config_path)
     this->InitializeAudioDevice();
     this->InitializeFFT();
     this->InitializeLEDMatrix(config_path);   
-	// TODO 08/12/17: make this an array
-	for(int i=0; i<this->config->getImageCount(); i++)
-	{
-		this->logos.push_back(new unsigned char[this->panelWidth * this->panelHeight * 3]);
-		const char * path = this->config->getImage(i).c_str();
-		this->ReadBitmap(path, this->logos[i]);
-	}
+	this->InitializeBitmaps();
     return;
 }
 
@@ -72,7 +66,7 @@ unsigned int Spectrometer::GetBitmapIndex(float seconds)
 {
 	int weight = (int)(100.0*this->animationDuration);
 	int value = (int)(seconds*100.0)%weight;
-	int image_count = this->config->getImageCount(); 
+	int image_count = this->config->getImageCount(this->imageSetIndex); 
 	int loop_image_count = 1;
 	if(image_count > 1)
 		loop_image_count = ((image_count-2)*2)+2;
@@ -82,7 +76,7 @@ unsigned int Spectrometer::GetBitmapIndex(float seconds)
 	{
 		index = image_count - 2 - (index - image_count);
 	}
-	index = (int)fmin(index, image_count-1);
+	index = (int)fmax(fmin(index, image_count-1), 0);
 	return index;
 }
 
@@ -169,6 +163,20 @@ SNDFILE* InitializeAudioFile(char* path)
     return infile;
 }
 */
+void Spectrometer::InitializeBitmaps()
+{	
+	for(int i=0; i<this->config->getImageSetCount(); i++)
+	{
+		for(int j=0; j<this->config->getImageCount(i); j++)
+		{
+			this->logos.push_back(new unsigned char[this->panelWidth * this->panelHeight * 3]);
+			const char * path = this->config->getImage(i,j).c_str();
+			this->ReadBitmap(path, this->logos[j]);
+		}
+	}
+	return;
+}
+
 void Spectrometer::InitializeFFT()
 {
     fprintf(stderr, "Initializing FFT\n");
@@ -571,8 +579,12 @@ void Spectrometer::Start()
         }*/
 
 	    this->displayMode = Bitmap;
+		options = Logarithmic|Autoscale|Sigmoid;
+		this->NormalizeBins(bins, normalized_bins, options);
+		unsigned int bitmap_index = this->GetBitmapIndex(seconds);
+		this->PrintBitmap(normalized_bins, this->logos[bitmap_index]);
         // display
-		switch(this->displayMode)
+		/*switch(this->displayMode)
 		{
 			case Bars:
 				options = Logarithmic|Autoscale|Sigmoid;
@@ -580,9 +592,12 @@ void Spectrometer::Start()
 				this->PrintBars(normalized_bins);
 				break;
 			case Bitmap:
+<<<<<<< HEAD
 				options = Logarithmic|Autoscale|Sigmoid;
 				this->NormalizeBins(bins, normalized_bins, options);
 				this->PrintBitmap(normalized_bins, this->logos[this->GetBitmapIndex(seconds)]);
+=======
+>>>>>>> ImageSet
 				break;
 			case Radial:
 				options = Logarithmic|Autoscale;
@@ -591,7 +606,7 @@ void Spectrometer::Start()
 				break;
 			default:
 				break;
-		}
+		}*/
 		
 		
         this->grid->FillRemaining(0,0,0);
@@ -624,7 +639,7 @@ Spectrometer::~Spectrometer()
     fprintf(stderr, "\tReleasing fft data\n");
     gpu_fft_release(this->fft);
     fprintf(stderr, "\tDeleting logo pointers\n");
-	for(int i=0; i<this->logos.size(); i++)
+	for(unsigned int i=0; i<this->logos.size(); i++)
 	{
 		delete this->logos[i];
 	}
