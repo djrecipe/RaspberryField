@@ -11,6 +11,7 @@
 class Config {
 public:
   Config(const std::string& filename);
+  ~Config();
 
   // Attribute accessors:
   float getAnimationDuration() const {
@@ -38,12 +39,12 @@ public:
   int getChainLength() const {
     return _chain_length;
   }
-  std::string getImage(int set_index, int image_index)
+  const char* getImage(int set_index, int image_index)
   {
-	  return _image_sets[set_index][image_index];
+	  return (*_image_sets[set_index])[image_index].c_str();
   }
   int getImageCount(int index) const {
-	return _image_sets[index].size();
+	return _image_sets[index]->size();
   }
   int getImageSetCount() const {
 	return _image_sets.size();
@@ -78,7 +79,7 @@ private:
 	  _led_max_brightness;
   float _animation_duration;
   std::vector<GridTransformer::Panel> _panels;
-  std::vector<std::vector<std::string>> _image_sets;
+  std::vector<std::vector<std::string>*> _image_sets;
 };
 
 #endif

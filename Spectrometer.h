@@ -93,10 +93,11 @@ class Spectrometer
 	
 	DisplayMode displayMode;
 	
-	std::vector<unsigned char*> logos;
+	std::vector<std::vector<unsigned char*>*> logos;
     
     void GetBins(short* buffer, int* bins);
-    unsigned int GetBitmapIndex(float seconds);
+    unsigned int GetBitmapIndex(float seconds, int set_index);
+    unsigned int GetBitmapSetIndex(float seconds);
 	int GetRandomNumber(int min, int max);
     void InitializeAudioDevice();
     void InitializeBitmaps();

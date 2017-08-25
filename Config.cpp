@@ -103,15 +103,23 @@ Config::Config(const string& filename) {
     for (int i = 0; i < images_config.getLength(); ++i)
 	{
 		libconfig::Setting& row = images_config[i];
-		std::vector<std::string> images; 
+		std::vector<std::string>* images = new std::vector<std::string>(); 
 		for (int j = 0; j < row.getLength(); ++j)
 		{
 			const char * c_path = row[j]["value"];
 			std::string path(c_path);
-			images.push_back(path);
+			images->push_back(path);
 		}
-		_image_sets.push_back(images);
+		this->_image_sets.push_back(images);
 	}
+	for(unsigned int i=0; i<_image_sets.size(); i++)
+	{
+		for(unsigned int j=0; j<_image_sets[i]->size(); j++)
+		{			
+			fprintf(stderr, "Discovered Image Path: %s\n", (*_image_sets[i])[j].c_str());
+		}
+	}
+	return;
   }
   catch (const libconfig::FileIOException& fioex)
   {
@@ -133,4 +141,13 @@ Config::Config(const string& filename) {
   catch (const libconfig::ConfigException& ex) {
     throw runtime_error("Error loading configuration!");
   }
+}
+
+Config::~Config()
+{
+	for(unsigned int i=0; i<this->_image_sets.size(); i++)
+	{
+		delete this->_image_sets[i];
+	}
+	// TODO: delete vector pointers
 }

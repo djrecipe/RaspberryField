@@ -62,11 +62,22 @@ void Spectrometer::GetBins(short* buffer, int* bins)
     return;
 }
 
-unsigned int Spectrometer::GetBitmapIndex(float seconds)
+unsigned int Spectrometer::GetBitmapSetIndex(float seconds)
+{
+	float full_cycle = 30.0;
+	float divisor = this->logos.size();
+	float interval = full_cycle/divisor;
+	int value = (int)seconds%(int)full_cycle;
+	unsigned int index = fmin((float)value/interval, (float)(this->logos.size()-1));
+	fprintf(stderr, "%i,%i\n",value,index);
+	return index;
+}
+
+unsigned int Spectrometer::GetBitmapIndex(float seconds, int set_index)
 {
 	int weight = (int)(100.0*this->animationDuration);
 	int value = (int)(seconds*100.0)%weight;
-	int image_count = this->config->getImageCount(this->imageSetIndex); 
+	int image_count = this->config->getImageCount(set_index); 
 	int loop_image_count = 1;
 	if(image_count > 1)
 		loop_image_count = ((image_count-2)*2)+2;
@@ -165,14 +176,17 @@ SNDFILE* InitializeAudioFile(char* path)
 */
 void Spectrometer::InitializeBitmaps()
 {	
+	this->logos.clear();
 	for(int i=0; i<this->config->getImageSetCount(); i++)
 	{
+		std::vector<unsigned char*> *new_logos = new std::vector<unsigned char*>();
 		for(int j=0; j<this->config->getImageCount(i); j++)
 		{
-			this->logos.push_back(new unsigned char[this->panelWidth * this->panelHeight * 3]);
-			const char * path = this->config->getImage(i,j).c_str();
-			this->ReadBitmap(path, this->logos[j]);
+			new_logos->push_back(new unsigned char[this->panelWidth * this->panelHeight * 3]);
+			const char * path = this->config->getImage(i,j);
+			this->ReadBitmap(path, (*new_logos)[j]);
 		}
+		this->logos.push_back(new_logos);
 	}
 	return;
 }
@@ -471,6 +485,9 @@ void Spectrometer::PrintRadial(int bins[][BIN_COUNT], float seconds)
 }
 void Spectrometer::ReadBitmap(const char* filename, unsigned char* data)
 {
+	if(filename == NULL or sizeof(filename) < 1)
+		throw "Invalid bitmap filename";
+	
     fprintf(stderr, "Reading bitmap (%s)\n", filename);
     
     // open file
@@ -581,8 +598,9 @@ void Spectrometer::Start()
 	    this->displayMode = Bitmap;
 		options = Logarithmic|Autoscale|Sigmoid;
 		this->NormalizeBins(bins, normalized_bins, options);
-		unsigned int bitmap_index = this->GetBitmapIndex(seconds);
-		this->PrintBitmap(normalized_bins, this->logos[bitmap_index]);
+		unsigned int bitmap_set_index = this->GetBitmapSetIndex(seconds);
+		unsigned int bitmap_index = this->GetBitmapIndex(seconds, bitmap_set_index);
+		this->PrintBitmap(normalized_bins, (*this->logos[bitmap_set_index])[bitmap_index]);
         // display
 		/*switch(this->displayMode)
 		{
@@ -641,6 +659,10 @@ Spectrometer::~Spectrometer()
     fprintf(stderr, "\tDeleting logo pointers\n");
 	for(unsigned int i=0; i<this->logos.size(); i++)
 	{
+		for(unsigned int j=0; j<this->logos[i]->size(); j++)
+		{
+			delete (*this->logos[i])[j];
+		}
 		delete this->logos[i];
 	}
 	//delete this->logos;
