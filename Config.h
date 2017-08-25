@@ -14,8 +14,8 @@ public:
   ~Config();
 
   // Attribute accessors:
-  float getAnimationDuration() const {
-	return _animation_duration;
+  float getAnimationDuration(int set_index) const {
+	return _animation_durations[set_index];
   }
   
   int getDisplayWidth() const {
@@ -49,6 +49,9 @@ public:
   int getImageSetCount() const {
 	return _image_sets.size();
   }
+  int getImageSetDuration() const {
+	  return _image_set_duration;
+  } 
   int getParallelCount() const {
     return _parallel_count;
   }
@@ -77,7 +80,8 @@ private:
       _crop_y;
   int _led_cutoff,
 	  _led_max_brightness;
-  float _animation_duration;
+  int _image_set_duration;
+  std::vector<float> _animation_durations;
   std::vector<GridTransformer::Panel> _panels;
   std::vector<std::vector<std::string>*> _image_sets;
 };

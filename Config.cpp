@@ -98,7 +98,20 @@ Config::Config(const string& filename) {
       throw invalid_argument(error.str());
     }
 	// Parse image info
-	_animation_duration = root["animation_duration"];
+	int image_set_duration = root["image_set_duration"];
+	_image_set_duration = ((float)image_set_duration)/1000.0;
+	libconfig::Setting& animation_durations_config = root["animation_durations"];
+	this->_animation_durations.clear();
+	for (int i=0; i<animation_durations_config.getLength(); ++i)
+	{
+		libconfig::Setting& row = animation_durations_config[i];
+		for(int j=0; j<row.getLength(); ++j)
+		{
+			int duration = row[j]["value"];
+			this->_animation_durations.push_back(((float)duration)/1000.0);
+		}
+		
+	}
 	libconfig::Setting& images_config = root["images"];
     for (int i = 0; i < images_config.getLength(); ++i)
 	{
@@ -139,7 +152,7 @@ Config::Config(const string& filename) {
     throw invalid_argument(error.str());
   }
   catch (const libconfig::ConfigException& ex) {
-    throw runtime_error("Error loading configuration!");
+    throw runtime_error("Error while loading configuration");
   }
 }
 

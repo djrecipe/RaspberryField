@@ -79,7 +79,6 @@ class Spectrometer
     int panelWidth = 0;
     int panelHeight = 0;
 	float seconds = 0.0;
-	float animationDuration = 1.0;
     int mailbox;
     struct GPU_FFT *fft;
     

@@ -64,7 +64,7 @@ void Spectrometer::GetBins(short* buffer, int* bins)
 
 unsigned int Spectrometer::GetBitmapSetIndex(float seconds)
 {
-	float full_cycle = 30.0;
+	float full_cycle = this->config->getImageSetDuration();
 	float divisor = this->logos.size();
 	float interval = full_cycle/divisor;
 	int value = (int)seconds%(int)full_cycle;
@@ -74,7 +74,7 @@ unsigned int Spectrometer::GetBitmapSetIndex(float seconds)
 
 unsigned int Spectrometer::GetBitmapIndex(float seconds, int set_index)
 {
-	int weight = (int)(100.0*this->animationDuration);
+	int weight = (int)(100.0*this->config->getAnimationDuration(set_index));
 	int value = (int)(seconds*100.0)%weight;
 	int image_count = this->config->getImageCount(set_index); 
 	int loop_image_count = 1;
@@ -224,9 +224,6 @@ void Spectrometer::InitializeLEDMatrix(char* config_path)
     this->panelHeight = height;
     fprintf(stderr, "\tSize: %d x %d\n", this->panelWidth, this->panelHeight);
     
-	// bitmap stuff
-	this->animationDuration = this->config->getAnimationDuration();
-	
     // Initialize GPIO
     if (!this->io.Init())
     {
