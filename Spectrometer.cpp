@@ -69,7 +69,6 @@ unsigned int Spectrometer::GetBitmapSetIndex(float seconds)
 	float interval = full_cycle/divisor;
 	int value = (int)seconds%(int)full_cycle;
 	unsigned int index = fmin((float)value/interval, (float)(this->logos.size()-1));
-	fprintf(stderr, "%i,%i\n",value,index);
 	return index;
 }
 
